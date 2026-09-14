@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+
+# internal pitch docs — keep private
+one-pager.md
+pitch-package.md

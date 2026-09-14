@@ -1,0 +1,27 @@
+{
+  "name": "wafiqr",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Embeddable cross-border trade escrow widget on Stellar, built on Trustless Work.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@creit.tech/stellar-wallets-kit": "^1.7.0",
+    "@stellar/stellar-sdk": "^13.3.0",
+    "axios": "^1.7.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-node-polyfills": "^0.28.0"
+  }
+}
