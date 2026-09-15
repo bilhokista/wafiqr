@@ -4,6 +4,7 @@
 //   dispute: deploy -> fund -> buyer disputes -> arbiter splits the funds
 //
 // Usage: node scripts/e2e-testnet.mjs
+// Resolve a dispute opened from the widget: RESUME_DISPUTE=<contractId> node scripts/e2e-testnet.mjs
 // Keys are generated once into scripts/.testnet-wallets.json (gitignored, testnet only).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -99,7 +100,7 @@ async function prepareAccount(name, usdcNeeded) {
         sendMax: '500',
         destination: pub(name),
         destAsset: USDC,
-        destAmount: String(usdcNeeded - have),
+        destAmount: (usdcNeeded - have).toFixed(7),
         path: [],
       }),
     );
@@ -177,15 +178,24 @@ async function disputePath() {
   const balance = Number(balances[0]?.balance ?? AMOUNT);
   const toBuyer = Math.round(balance * 0.7 * 1e7) / 1e7;
   const toSeller = Math.round((balance - toBuyer) * 1e7) / 1e7;
+  // Pay whoever the escrow names, so this also resolves disputes opened from the widget.
+  const [escrow] = await tw('GET', `/helper/get-escrow-by-contract-ids?contractIds[]=${contractId}`);
+  const buyerAddress = escrow?.roles?.approver ?? pub('buyer');
+  const sellerAddress = escrow?.roles?.receiver ?? pub('seller');
+  // The widget demo uses one wallet as buyer and seller; the API rejects duplicate addresses.
+  const distributions =
+    buyerAddress === sellerAddress
+      ? [{ address: buyerAddress, amount: balance }]
+      : [
+          { address: buyerAddress, amount: toBuyer },
+          { address: sellerAddress, amount: toSeller },
+        ];
   await run(
     '/escrow/single-release/resolve-dispute',
     {
       contractId,
       disputeResolver: pub('arbiter'),
-      distributions: [
-        { address: pub('buyer'), amount: toBuyer },
-        { address: pub('seller'), amount: toSeller },
-      ],
+      distributions,
     },
     'arbiter',
   );
@@ -198,9 +208,11 @@ async function main() {
   console.log('buyer  ', pub('buyer'));
   console.log('seller ', pub('seller'));
   console.log('arbiter', pub('arbiter'));
-  await prepareAccount('buyer', AMOUNT * 2);
-  await prepareAccount('seller', 0);
-  await prepareAccount('arbiter', 0);
+  if (!process.env.RESUME_DISPUTE) {
+    await prepareAccount('buyer', AMOUNT * 2);
+    await prepareAccount('seller', 0);
+    await prepareAccount('arbiter', 0);
+  }
 
   if (!process.env.RESUME_DISPUTE) {
     const happy = await happyPath();

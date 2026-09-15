@@ -10,10 +10,8 @@ import {
   approveMilestone,
   releaseFunds,
   disputeEscrow,
-  resolveDispute,
   markShipped,
   getEscrow,
-  getBalances,
   USDC_TESTNET_ISSUER,
   type DeployBody,
   type EscrowState,
@@ -86,15 +84,15 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
         description: deal.description,
         amount: deal.amount,
         platformFee: 0,
-        // Single-wallet integration demo: every role is the connected wallet, so only
-        // one testnet account needs a USDC trustline. Swap in real seller/arbiter/
-        // platform accounts (each with a USDC trustline) for a realistic multi-party demo.
+        // The connected wallet plays buyer and seller so one Freighter account can click
+        // through the flow. The arbiter must be a different account: the contract rejects
+        // a dispute opened by its own dispute resolver.
         roles: {
           approver: buyer,
           serviceProvider: buyer,
           releaseSigner: buyer,
           platformAddress: buyer,
-          disputeResolver: buyer,
+          disputeResolver: deal.arbiter,
           receiver: buyer,
         },
         milestones: [{ description: 'Goods delivered and received' }],
@@ -141,12 +139,11 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
       setStage('disputed');
     });
 
-  const resolve = () =>
-    act('Resolve dispute', async () => {
-      // Demo: arbiter refunds the buyer in full. Distributions must sum the current escrow balance.
-      const [{ balance }] = await getBalances([contractId]);
-      await resolveDispute({ contractId, disputeResolver: buyer, distributions: [{ address: buyer, amount: balance }] });
-      setStage('resolved');
+  // The arbiter signs the resolution from their own wallet, so the widget only polls for it.
+  const checkResolution = () =>
+    act('Check resolution', async () => {
+      const escrow = await getEscrow(contractId);
+      if (escrow) setStage(stageFromChain(escrow));
     });
 
   return (
@@ -183,7 +180,12 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
             </>
           )}
           {stage === 'approved' && <button style={btn} disabled={busy} onClick={release}>Release to seller</button>}
-          {stage === 'disputed' && <button style={btn} disabled={busy} onClick={resolve}>Arbiter: resolve</button>}
+          {stage === 'disputed' && (
+            <div style={{ fontSize: 13, color: '#666' }}>
+              Dispute open. The arbiter ({short(deal.arbiter)}) reviews the evidence and splits the funds.
+              <button style={{ ...btnGhost, marginTop: 8 }} disabled={busy} onClick={checkResolution}>Check resolution</button>
+            </div>
+          )}
           {stage === 'released' && <div style={done}>✓ Paid to seller. Trade complete.</div>}
           {stage === 'resolved' && <div style={done}>✓ Dispute resolved by arbiter.</div>}
           {(stage === 'released' || stage === 'resolved') && (

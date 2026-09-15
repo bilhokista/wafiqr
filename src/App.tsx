@@ -8,7 +8,7 @@ const deal: DealConfig = {
   description: 'Banda Islands nutmeg oil, GC-MS report included. Ships DHL from Jakarta.',
   amount: 10,
   seller: 'GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO',
-  arbiter: 'GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP2',
+  arbiter: 'GBFRCU73YKD5NUWBL2SLSZHBAP6IH3MNWIKMUYOIZXGBIUP74WLTGGNJ', // arbiter account from scripts/e2e-testnet.mjs
   platformAddress: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
 };
 
