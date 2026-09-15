@@ -28,8 +28,8 @@ are placeholders — replace them with real testnet accounts to release funds fo
 1. **Create escrow** — buyer deploys a single-release escrow (roles: buyer = approver,
    seller = receiver, an agreed arbiter = disputeResolver).
 2. **Fund** — buyer deposits USDC; funds are locked on-chain, visible to both.
-3. **Ship** — seller ships and submits proof (this demo marks it with a button; real
-   evidence — tracking, photos, video — is roadmap).
+3. **Ship** — seller records shipment evidence (waybill, photos, video link) on-chain
+   against the milestone.
 4. **Confirm** — buyer confirms receipt, or opens a dispute.
 5. **Release / Resolve** — funds release to the seller, or the arbiter resolves the
    dispute on the evidence.
@@ -46,11 +46,28 @@ are placeholders — replace them with real testnet accounts to release funds fo
 The escrow rails are Trustless Work's. wafiqr is the cross-border-trade layer on top:
 the widget, the buyer/seller/arbiter flow, and the vertical this serves.
 
-## Verify before mainnet
+## Proof on testnet
 
-The endpoint paths and the deploy body follow the Trustless Work docs. A few
-operation sub-bodies (approve-milestone, resolve-dispute field names) should be checked
-against the live Swagger at https://api.trustlesswork.com/docs before mainnet use.
+`scripts/e2e-testnet.mjs` runs the full flow with three separate accounts (buyer, seller,
+arbiter), each signing its own step. Last run, 15 Sep 2026:
+
+| Path | What happened | Escrow |
+|---|---|---|
+| Happy | Buyer funds 10 USDC, seller records DHL waybill as on-chain evidence, buyer approves, funds release. Seller received 9.97 USDC (0.3% Trustless Work fee). | [CC6OZ…DMQOBT](https://stellar.expert/explorer/testnet/contract/CC6OZV3W7METTKZVSEKRJM3RWFQ6LHNUKIATHBGPORBSO7VUSNDMQOBT) |
+| Dispute | Buyer funds 10 USDC and opens a dispute, arbiter splits it 7 USDC back to buyer, 3 USDC to seller. | [CDO2U…EWMLY](https://stellar.expert/explorer/testnet/contract/CDO2UQUENFN5B7B6BSNCEN2ZM7HCN6YWPTYP6JPKBEED664EHFKEWMLY) |
+
+```sh
+node scripts/e2e-testnet.mjs   # generates testnet keys into scripts/.testnet-wallets.json (gitignored)
+```
+
+The browser widget signs every role with the one connected wallet, so a single Freighter
+account can click through the whole flow. The script is the multi-party proof.
+
+## Before deploying the widget
+
+`VITE_TW_API_KEY` is inlined into the JavaScript bundle at build time. Run the widget
+locally, or put the Trustless Work calls behind a small server-side proxy before hosting
+`dist/` anywhere public.
 
 ## Roadmap
 

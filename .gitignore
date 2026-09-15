@@ -8,3 +8,6 @@ dist
 # internal pitch docs — keep private
 one-pager.md
 pitch-package.md
+
+# generated testnet keys
+scripts/.testnet-wallets.json

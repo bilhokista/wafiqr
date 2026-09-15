@@ -77,24 +77,36 @@ export const approveMilestone = (b: { contractId: string; approver: string; mile
     b.approver,
   );
 
-export const releaseFunds = (b: { contractId: string; releaseSigner: string }) =>
+// Seller records shipment evidence on-chain against the milestone.
+export const markShipped = (b: { contractId: string; serviceProvider: string; evidence: string }) =>
+  run(
+    '/escrow/single-release/change-milestone-status',
+    {
+      contractId: b.contractId,
+      milestoneIndex: '0',
+      newStatus: 'shipped',
+      newEvidence: b.evidence,
+      serviceProvider: b.serviceProvider,
+    },
+    b.serviceProvider,
+  );
+
+export const releaseFunds =(b: { contractId: string; releaseSigner: string }) =>
   run(
     '/escrow/single-release/release-funds',
     { contractId: b.contractId, releaseSigner: b.releaseSigner },
     b.releaseSigner,
   );
 
-export const disputeEscrow = (b: { contractId: string; disputeResolver: string }) =>
-  run(
-    '/escrow/single-release/dispute-escrow',
-    { contractId: b.contractId, disputeResolver: b.disputeResolver },
-    b.disputeResolver,
-  );
+// Either party (buyer or seller) can open a dispute; the API field is `signer`.
+export const disputeEscrow = (b: { contractId: string; signer: string }) =>
+  run('/escrow/single-release/dispute-escrow', { contractId: b.contractId, signer: b.signer }, b.signer);
 
+// Amounts must sum the escrow balance at resolution time (read it with getBalances).
 export const resolveDispute = (b: {
   contractId: string;
   disputeResolver: string;
-  distributions: [string, number][];
+  distributions: { address: string; amount: number }[];
 }) =>
   run(
     '/escrow/single-release/resolve-dispute',
@@ -102,9 +114,22 @@ export const resolveDispute = (b: {
     b.disputeResolver,
   );
 
-export async function getBalances(contractIds: string[]) {
-  const { data } = await http.get('/helper/get-multiple-escrow-balance', {
-    params: { addresses: contractIds.join(',') },
-  });
+export async function getBalances(contractIds: string[]): Promise<{ address: string; balance: number }[]> {
+  const query = contractIds.map((id) => `addresses[]=${encodeURIComponent(id)}`).join('&');
+  const { data } = await http.get(`/helper/get-multiple-escrow-balance?${query}`);
   return data;
+}
+
+export interface EscrowState {
+  contractId: string;
+  balance: number;
+  flags: { disputed: boolean; released: boolean; resolved: boolean };
+  milestones: { status: string; evidence: string; approved: boolean }[];
+}
+
+export async function getEscrow(contractId: string): Promise<EscrowState | undefined> {
+  const { data } = await http.get(
+    `/helper/get-escrow-by-contract-ids?contractIds[]=${encodeURIComponent(contractId)}`,
+  );
+  return data[0];
 }

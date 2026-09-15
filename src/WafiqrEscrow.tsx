@@ -1,7 +1,7 @@
 // wafiqr escrow widget — the embeddable piece a seller drops into their own page.
 // One deal: buyer funds USDC into a Trustless Work single-release escrow; funds
 // release when the buyer confirms the goods arrived, or an arbiter resolves a dispute.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { connectWallet } from './lib/wallet';
 import { addUsdcTrustline, buyUsdcWithXlm } from './lib/trustline';
 import {
@@ -11,8 +11,12 @@ import {
   releaseFunds,
   disputeEscrow,
   resolveDispute,
+  markShipped,
+  getEscrow,
+  getBalances,
   USDC_TESTNET_ISSUER,
   type DeployBody,
+  type EscrowState,
 } from './lib/trustlessWork';
 
 type Stage = 'draft' | 'deployed' | 'funded' | 'shipped' | 'approved' | 'released' | 'disputed' | 'resolved';
@@ -33,6 +37,20 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [trusted, setTrusted] = useState(false);
+
+  // Keep the escrow id across reloads, then rebuild the stage from on-chain state.
+  const storageKey = `wafiqr:${deal.title}`;
+  useEffect(() => {
+    const saved = readSaved(storageKey);
+    if (!saved) return;
+    setContractId(saved);
+    getEscrow(saved)
+      .then((escrow) => escrow && setStage(stageFromChain(escrow)))
+      .catch((e) => setError(`Could not load escrow: ${(e as Error).message}`));
+  }, [storageKey]);
+  useEffect(() => {
+    if (contractId) writeSaved(storageKey, contractId);
+  }, [storageKey, contractId]);
 
   async function act(label: string, fn: () => Promise<void>) {
     setBusy(true);
@@ -93,6 +111,18 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
       setStage('funded');
     });
 
+  const startOver = () => {
+    writeSaved(storageKey, '');
+    setContractId('');
+    setStage('draft');
+  };
+
+  const ship = () =>
+    act('Mark shipped', async () => {
+      await markShipped({ contractId, serviceProvider: buyer, evidence: 'Demo: DHL waybill + packing video' });
+      setStage('shipped');
+    });
+
   const approve = () =>
     act('Confirm delivery', async () => {
       await approveMilestone({ contractId, approver: buyer, milestoneIndex: '0' });
@@ -107,14 +137,15 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
 
   const dispute = () =>
     act('Open dispute', async () => {
-      await disputeEscrow({ contractId, disputeResolver: buyer });
+      await disputeEscrow({ contractId, signer: buyer });
       setStage('disputed');
     });
 
   const resolve = () =>
     act('Resolve dispute', async () => {
-      // Demo: arbiter refunds the buyer in full. distributions sum the escrow funds.
-      await resolveDispute({ contractId, disputeResolver: buyer, distributions: [[buyer, deal.amount]] });
+      // Demo: arbiter refunds the buyer in full. Distributions must sum the current escrow balance.
+      const [{ balance }] = await getBalances([contractId]);
+      await resolveDispute({ contractId, disputeResolver: buyer, distributions: [{ address: buyer, amount: balance }] });
       setStage('resolved');
     });
 
@@ -142,7 +173,7 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
           {stage === 'funded' && (
             <div style={{ fontSize: 13, color: '#666' }}>
               Funds locked. Seller ships and submits proof, then:
-              <button style={{ ...btn, marginTop: 8 }} disabled={busy} onClick={() => setStage('shipped')}>Mark shipped (seller)</button>
+              <button style={{ ...btn, marginTop: 8 }} disabled={busy} onClick={ship}>Mark shipped (seller)</button>
             </div>
           )}
           {stage === 'shipped' && (
@@ -155,11 +186,41 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
           {stage === 'disputed' && <button style={btn} disabled={busy} onClick={resolve}>Arbiter: resolve</button>}
           {stage === 'released' && <div style={done}>✓ Paid to seller. Trade complete.</div>}
           {stage === 'resolved' && <div style={done}>✓ Dispute resolved by arbiter.</div>}
+          {(stage === 'released' || stage === 'resolved') && (
+            <button style={btnGhost} onClick={startOver}>Start a new deal</button>
+          )}
         </>
       )}
       {error && <div style={{ color: '#c0392b', fontSize: 12, marginTop: 8 }}>{error}</div>}
     </div>
   );
+}
+
+function stageFromChain(escrow: EscrowState): Stage {
+  if (escrow.flags.resolved) return 'resolved';
+  if (escrow.flags.released) return 'released';
+  if (escrow.flags.disputed) return 'disputed';
+  const milestone = escrow.milestones[0];
+  if (milestone?.approved) return 'approved';
+  if (milestone?.status === 'shipped') return 'shipped';
+  return escrow.balance > 0 ? 'funded' : 'deployed';
+}
+
+// localStorage can throw (private mode, blocked storage); the widget still works without it.
+function readSaved(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSaved(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable: the escrow id just won't survive a reload.
+  }
 }
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 5)}…${a.slice(-5)}` : a);
