@@ -17,11 +17,12 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
-import type { Deal, DealStatus, Evidence, Listing, UserProfile} from './types';
+import type { Deal, DealStatus, Evidence, Listing, UserProfile, Payout, PayoutStatus } from './types';
 
 const LISTINGS = 'listings';
 const DEALS = 'deals';
 const USERS = 'users';
+const PAYOUTS = 'payouts';
 
 // --- Users -----------------------------------------------------------------
 
@@ -111,4 +112,32 @@ export async function updateDealStatus(id: string, status: DealStatus, contractI
 
 export async function appendEvidence(id: string, evidence: Evidence) {
   await updateDoc(doc(db, DEALS, id), { evidence: arrayUnion(evidence), updatedAt: Date.now() });
+}
+
+/**
+ * The payout record for a deal.
+ *
+ * Kept as its own document rather than a field on the deal, because the deal's
+ * commercial terms are frozen after creation by the security rules, and a
+ * payout moves through states long after that freeze.
+ */
+export async function savePayout(payout: Payout) {
+  await setDoc(doc(db, PAYOUTS, payout.dealId), { ...payout, updatedAt: Date.now() });
+}
+
+export async function getPayout(dealId: string): Promise<Payout | null> {
+  const snap = await getDoc(doc(db, PAYOUTS, dealId));
+  return snap.exists() ? (snap.data() as Payout) : null;
+}
+
+export async function updatePayout(dealId: string, patch: Partial<Payout>) {
+  await updateDoc(doc(db, PAYOUTS, dealId), { ...patch, updatedAt: Date.now() });
+}
+
+export async function setPayoutStatus(dealId: string, status: PayoutStatus, failure?: string) {
+  await updateDoc(doc(db, PAYOUTS, dealId), {
+    status,
+    updatedAt: Date.now(),
+    ...(failure ? { failure } : {}),
+  });
 }

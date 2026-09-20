@@ -75,7 +75,75 @@ export interface Deal {
   shipBy: number; // epoch ms deadline the seller agreed to
   status: DealStatus;
   contractId: string; // Trustless Work escrow contract
+  /** How the seller chose to be paid. Defaults to `wallet` for older deals. */
+  payoutRail?: PayoutRail;
   evidence: Evidence[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * How a seller is paid out after release.
+ *
+ * `wallet` is the status quo: USDC lands in the seller's Stellar account and
+ * stops there. That is fine for a seller who wants to hold USDC and useless to
+ * a village producer who needs rupiah in a bank.
+ *
+ * `bank` runs the released USDC through a licensed off-ramp into an Indonesian
+ * bank account. wafiqr never holds the funds — the licensed provider does, and
+ * only for as long as the conversion takes.
+ */
+export type PayoutRail = 'wallet' | 'bank';
+
+export type PayoutStatus =
+  | 'none'
+  | 'quoted'
+  | 'submitted'
+  | 'settled'
+  | 'failed';
+
+/**
+ * What an Indonesian exporter must be able to show about a payment.
+ *
+ * Exporters of natural resources must repatriate export proceeds into an
+ * onshore account (PP 21/2026, PBI 5/2026). A payout that ends in a crypto
+ * wallet leaves the exporter unable to show that, so the record has to carry
+ * the onshore leg or the tool is a liability to the person using it.
+ *
+ * Every field is what the exporter supplies or the provider returns. wafiqr
+ * asserts none of it — it records what it was given, with a timestamp.
+ */
+export interface SettlementRecord {
+  /** Bank account the proceeds landed in, masked for display. */
+  accountMasked: string;
+  /** Bank name as the provider reported it. */
+  bankName: string;
+  /** True when the account is at a state-owned (Himbara) bank. */
+  himbara: boolean;
+  /** Customs export declaration number, when the exporter has filed one. */
+  pebNumber?: string;
+  /** Amount credited, in IDR, as the provider reported it. */
+  idrAmount: number;
+  /** Rate the provider used, IDR per USDC. */
+  idrPerUsdc: number;
+  /** Provider's own reference, so a stranger can reconcile. */
+  providerReference: string;
+  settledAt: number;
+}
+
+export interface Payout {
+  dealId: string;
+  rail: PayoutRail;
+  status: PayoutStatus;
+  /** Which licensed off-ramp handled it. Empty while `rail` is `wallet`. */
+  provider: string;
+  usdcAmount: number;
+  /** Present once the provider has quoted, before anything is sent. */
+  quotedIdr?: number;
+  /** Present only after the money is onshore. */
+  settlement?: SettlementRecord;
+  /** Provider error text, kept verbatim rather than summarised. */
+  failure?: string;
   createdAt: number;
   updatedAt: number;
 }

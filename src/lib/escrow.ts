@@ -14,8 +14,17 @@ import {
   type DeployBody,
   type EscrowState,
 } from './trustlessWork';
-import { appendEvidence, updateDealStatus } from './db';
-import type { Deal, DealStatus } from './types';
+import { appendEvidence, getPayout, savePayout, updateDealStatus, updatePayout } from './db';
+import {
+  activeProvider,
+  newPayout,
+  quoteForDeal,
+  repatriationCheck,
+  settlementText,
+  submitForDeal,
+  type QuoteInput,
+} from './payout';
+import type { Deal, DealStatus, PayoutRail, SettlementRecord } from './types';
 
 /** The agreed terms, written into the escrow description so they are auditable. */
 export function termsText(deal: Deal): string {
@@ -94,6 +103,78 @@ export async function approveForDeal(deal: Deal, note: string) {
 export async function releaseForDeal(deal: Deal) {
   await releaseFunds({ contractId: deal.contractId, releaseSigner: deal.buyerWallet });
   await updateDealStatus(deal.id, 'released');
+
+  // Release is where this used to end, with USDC sitting in the seller's
+  // Stellar account. For a village producer that is not payment, it is a
+  // balance in an asset they never asked for. Opening the payout record here
+  // means the deal room can show the last mile as unfinished rather than
+  // showing a green tick over a seller who still cannot buy anything.
+  const rail: PayoutRail = deal.payoutRail ?? 'wallet';
+  if (!(await getPayout(deal.id))) {
+    await savePayout(newPayout(deal, rail, activeProvider().name));
+  }
+}
+
+/**
+ * Quotes the conversion without committing the seller to it.
+ *
+ * Separate from sending on purpose: the seller sees the rate while the money
+ * is still theirs in USDC, and can walk away from a bad one.
+ */
+export async function quotePayout(deal: Deal, input: QuoteInput) {
+  const quote = await quoteForDeal(deal, input);
+  await updatePayout(deal.id, { status: 'quoted', quotedIdr: quote.idrAmount });
+  return quote;
+}
+
+/**
+ * Hands the conversion to the licensed provider.
+ *
+ * wafiqr's involvement ends at this call. Custody passes to the provider, who
+ * holds it under their licence for as long as the conversion takes, and the
+ * only thing that comes back is a reference.
+ */
+export async function sendPayout(deal: Deal, input: QuoteInput & { from: string }) {
+  const check = repatriationCheck(deal.payoutRail ?? 'wallet', input.bankCode);
+
+  try {
+    const reference = await submitForDeal(deal, { ...input, engagementId: deal.id });
+    await updatePayout(deal.id, { status: 'submitted', provider: activeProvider().name });
+    await appendEvidence(deal.id, {
+      kind: 'inspection',
+      note: check.ok
+        ? `Payout submitted to ${activeProvider().name}, ref ${reference}.`
+        : `Payout submitted to ${activeProvider().name}, ref ${reference}. ${check.reason}`,
+      byUid: deal.sellerUid,
+      byRole: 'seller',
+      at: Date.now(),
+    });
+    return reference;
+  } catch (error: unknown) {
+    // Kept verbatim. A provider's refusal is the most useful sentence in the
+    // whole flow and summarising it loses the reason.
+    const failure = error instanceof Error ? error.message : String(error);
+    await updatePayout(deal.id, { status: 'failed', failure });
+    throw error;
+  }
+}
+
+/**
+ * Records what the provider says happened, once it has.
+ *
+ * wafiqr asserts none of it. The settlement is the provider's account of the
+ * onshore leg, written down with a timestamp so both sides and the exporter's
+ * accountant read the same line.
+ */
+export async function recordSettlement(deal: Deal, settlement: SettlementRecord) {
+  await updatePayout(deal.id, { status: 'settled', settlement });
+  await appendEvidence(deal.id, {
+    kind: 'inspection',
+    note: `Settled · ${settlementText(settlement)}`,
+    byUid: deal.sellerUid,
+    byRole: 'seller',
+    at: settlement.settledAt,
+  });
 }
 
 export async function disputeForDeal(

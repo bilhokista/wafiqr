@@ -69,5 +69,47 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Payouts are NOT public, unlike listings and deals.
+    //
+    // A deal is public because a buyer has to be able to inspect it before
+    // trusting a stranger. A payout carries the seller's bank — masked, and
+    // still nobody else's business. The full account number is never written
+    // here at all: it goes to the licensed provider at submission time and is
+    // not persisted, so this document holds a masked tail and a reference.
+    match /payouts/{dealId} {
+      function deal() {
+        return get(/databases/$(database)/documents/deals/$(dealId)).data;
+      }
+
+      function isSeller() {
+        return signedIn() && request.auth.uid == deal().sellerUid;
+      }
+
+      function isParty() {
+        return signedIn()
+          && (request.auth.uid == deal().sellerUid || request.auth.uid == deal().buyerUid);
+      }
+
+      // The buyer may read it, because "have you been paid" is a fair question
+      // from the person who paid.
+      allow read: if isParty();
+
+      // Only the seller starts a payout, and only for the amount the escrow
+      // actually released.
+      allow create: if isSeller()
+        && request.resource.data.dealId == dealId
+        && request.resource.data.usdcAmount is number
+        && request.resource.data.usdcAmount > 0
+        && request.resource.data.usdcAmount <= deal().amount
+        && request.resource.data.rail in ['wallet', 'bank'];
+
+      // The figure is frozen once the payout exists. Status, quote, settlement
+      // and failure text may move; the amount may not.
+      allow update: if isSeller()
+        && request.resource.data.dealId == resource.data.dealId
+        && request.resource.data.usdcAmount == resource.data.usdcAmount;
+
+      allow delete: if false;
+    }
   }
 }
