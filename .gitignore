@@ -11,3 +11,6 @@ pitch-package.md
 
 # generated testnet keys
 scripts/.testnet-wallets.json
+
+# firebase deploy cache
+.firebase
