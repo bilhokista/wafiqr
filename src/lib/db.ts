@@ -15,8 +15,7 @@ import {
   arrayUnion,
   onSnapshot,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import type { Deal, DealStatus, Evidence, Listing, UserProfile, Payout, PayoutStatus } from './types';
 
 const LISTINGS = 'listings';
@@ -67,12 +66,6 @@ export async function getListing(id: string): Promise<Listing | null> {
 
 export async function setListingActive(id: string, active: boolean) {
   await updateDoc(doc(db, LISTINGS, id), { active });
-}
-
-export async function uploadListingImage(sellerUid: string, file: File): Promise<string> {
-  const path = `listings/${sellerUid}/${Date.now()}-${file.name}`;
-  await uploadBytes(ref(storage, path), file);
-  return getDownloadURL(ref(storage, path));
 }
 
 // --- Deals -----------------------------------------------------------------

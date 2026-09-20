@@ -4,7 +4,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 const config = {
   apiKey: import.meta.env.VITE_FB_API_KEY,
@@ -40,4 +39,3 @@ function offlineService<T>(name: string): T {
 
 export const auth: Auth = app ? getAuth(app) : offlineService<Auth>('auth');
 export const db: Firestore = app ? getFirestore(app) : offlineService<Firestore>('firestore');
-export const storage: FirebaseStorage = app ? getStorage(app) : offlineService<FirebaseStorage>('storage');

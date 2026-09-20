@@ -1,7 +1,8 @@
 // Seller side: the producer's own lots, and the form that publishes a new one.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createListing, listSellerListings, setListingActive, uploadListingImage } from '../lib/db';
+import { createListing, listSellerListings, setListingActive } from '../lib/db';
+import { toStoredImage } from '../lib/image';
 import { useAuth } from '../lib/auth';
 import type { Incoterm, Listing } from '../lib/types';
 import { Action, Badge, Eyebrow, Field, Notice, Reveal, Shell, Spinner, usdc } from '../ui/kit';
@@ -33,6 +34,9 @@ export function Sell() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [posted, setPosted] = useState('');
+  // A published lot that lost its photo is not a failure, and saying so in a
+  // red box would tell a seller their work was rejected when it was not.
+  const [note, setNote] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -61,8 +65,22 @@ export function Sell() {
     }
     setBusy(true);
     setError('');
+    setNote('');
     try {
-      const imageUrl = file ? await uploadListingImage(user.uid, file) : '';
+      // A failed photo must not take the lot down with it. Someone who has
+      // filled in a specification, a price and a lead time has done the work
+      // that matters; losing all of it because a picture would not encode is
+      // the wrong trade, and the seller is the one who would retype it.
+      let imageUrl = '';
+      let photoNote = '';
+      if (file) {
+        try {
+          imageUrl = await toStoredImage(file);
+        } catch (e) {
+          photoNote = `${(e as Error).message} The lot is published without a picture; edit it later to add one.`;
+        }
+      }
+
       await createListing({
         sellerUid: user.uid,
         sellerName: profile.displayName,
@@ -84,6 +102,7 @@ export function Sell() {
       setDraft(emptyDraft);
       setFile(null);
       setPosted(String(Date.now()));
+      setNote(photoNote);
     } catch (e) {
       setError(`Could not publish the lot: ${(e as Error).message}`);
     } finally {
@@ -218,7 +237,11 @@ export function Sell() {
                 </Field>
 
                 {error && <Notice tone="error">{error}</Notice>}
-                {posted && !error && <Notice tone="info">Lot published. It is live in the market now.</Notice>}
+                {posted && !error && (
+                  <Notice tone="info">
+                    Lot published. It is live in the market now.{note ? ` ${note}` : ''}
+                  </Notice>
+                )}
 
                 <Action full trailing={busy ? <Spinner /> : <ArrowUpRight size={13} />} disabled={busy} onClick={publish}>
                   {busy ? 'Publishing' : 'Publish this lot'}
