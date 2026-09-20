@@ -18,6 +18,7 @@ import { addUsdcTrustline, buyUsdcWithXlm } from '../lib/trustline';
 import type { Deal, DealStatus } from '../lib/types';
 import { Action, Badge, Eyebrow, Field, Notice, Shell, Spinner, shortAddress, shortDate, usdc } from '../ui/kit';
 import { ArrowRight, Clock, Scale, Shield, Ship, Wallet } from '../ui/icons';
+import { PayoutPanel } from '../ui/PayoutPanel';
 
 const STEPS: { key: DealStatus; label: string; who: string }[] = [
   { key: 'draft', label: 'Terms agreed', who: 'Both' },
@@ -226,14 +227,14 @@ export function DealRoom() {
                   </Notice>
                 )}
 
-                {(deal.status === 'released' || deal.status === 'resolved') && (
+                {deal.status === 'resolved' && (
                   <div className="flex items-center gap-3 rounded-2xl bg-sage/10 px-4 py-4 text-sage-deep">
                     <Shield size={18} />
-                    <span className="text-[13px]">
-                      {deal.status === 'released' ? 'Paid out. The trade closed clean.' : 'Closed by the arbiter.'}
-                    </span>
+                    <span className="text-[13px]">Closed by the arbiter.</span>
                   </div>
                 )}
+
+                {deal.status === 'released' && <PayoutPanel deal={deal} role={role} />}
 
                 {profile && !profile.walletAddress && (
                   <Notice tone="error">Link a Stellar wallet on your account before signing anything.</Notice>
