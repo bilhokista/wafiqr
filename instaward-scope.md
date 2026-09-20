@@ -38,11 +38,13 @@ Built ahead of this request and already in the repository:
 
 - `CourierProvider` — the interface a carrier plugs into
 - A DHL adapter against Shipment Tracking Unified
-- Refusal of a waybill the courier has never seen, at filing time
+- Refusal of a waybill the courier has never seen, at filing time. Dormant
+  until a carrier key is configured: with none, the number is recorded as typed
+  and marked unverified rather than silently passed as checked
 - The courier's reading written on chain beside the seller's note, and filed as
   its own evidence entry under a `courier` badge
-- `recheckShipment` for the buyer and the arbiter, which deliberately does not
-  move the deal status
+- `recheckShipment` in the library, which deliberately does not move the deal
+  status — not yet reachable from the deal room, which is deliverable 3 below
 
 ## The problem, concretely
 
