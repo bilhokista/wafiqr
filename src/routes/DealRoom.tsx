@@ -272,7 +272,12 @@ export function DealRoom() {
                     </span>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={item.kind === 'dispute' ? 'bad' : 'neutral'}>{item.byRole}</Badge>
+                        {/* A courier's reading is filed under the arbiter role,
+                            so the trail shows at a glance which lines a party
+                            asserted and which came from outside the deal. */}
+                        <Badge tone={item.kind === 'dispute' ? 'bad' : item.byRole === 'arbiter' ? 'good' : 'neutral'}>
+                          {item.byRole === 'arbiter' && item.kind === 'inspection' ? 'courier' : item.byRole}
+                        </Badge>
                         <span className="text-[11px] text-ink-mute">{shortDate(item.at)}</span>
                         {item.trackingNumber && <span className="font-mono text-[11px] text-ink-soft">{item.trackingNumber}</span>}
                       </div>

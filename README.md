@@ -57,6 +57,19 @@ Security rules live in `firestore.rules` and `storage.rules`. The shape they enf
 listings and deals are publicly readable, a seller may only write their own listing, and a
 deal's commercial terms cannot change after creation — only status, contract id and evidence.
 
+### Courier tracking
+
+Optional. With `VITE_DHL_API_KEY` set, a waybill is checked with DHL when the
+seller files the shipment: a number the courier has never seen is refused, and
+the courier's own reading is written into the escrow evidence and shown in the
+deal room under a `courier` badge rather than the seller's.
+
+Without a key nothing breaks. The number is recorded as typed and marked
+unverified, which is what it is.
+
+A delivery scan never releases money. It says a parcel reached an address, not
+that the goods match the sample, and the buyer still confirms.
+
 ### Stellar
 
 A buyer needs a Freighter wallet, a USDC trustline and testnet USDC. The deal room has a

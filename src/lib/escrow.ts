@@ -24,6 +24,13 @@ import {
   submitForDeal,
   type QuoteInput,
 } from './payout';
+import {
+  checkEvidence,
+  checkShipment,
+  checkText,
+  contradictsShipping,
+  couriers,
+} from './courier';
 import type { Deal, DealStatus, PayoutRail, SettlementRecord } from './types';
 
 /** The agreed terms, written into the escrow description so they are auditable. */
@@ -74,7 +81,22 @@ export async function shipForDeal(
   deal: Deal,
   proof: { trackingNumber: string; note: string; link?: string },
 ) {
-  const evidence = `${proof.trackingNumber} · ${proof.note}${proof.link ? ` · ${proof.link}` : ''}`;
+  // Ask the courier before writing anything on chain. A waybill nobody has
+  // heard of is the one thing worth stopping for: it is the difference between
+  // a shipment that is early and a shipment that does not exist, and the buyer
+  // cannot tell them apart from a string in a text box.
+  const check = couriers().length > 0 ? await checkShipment(proof.trackingNumber).catch(() => null) : null;
+
+  if (check && contradictsShipping(check)) {
+    throw new Error(
+      `${check.courier} has no record of ${proof.trackingNumber}. Check the number, or wait until the parcel is collected and file again.`,
+    );
+  }
+
+  // The courier's reading travels on chain with the seller's note, so the
+  // escrow's own record carries the independent line rather than only ours.
+  const verified = check ? ` · ${checkText(proof.trackingNumber, check)}` : '';
+  const evidence = `${proof.trackingNumber} · ${proof.note}${proof.link ? ` · ${proof.link}` : ''}${verified}`;
   await markShipped({ contractId: deal.contractId, serviceProvider: deal.sellerWallet, evidence });
   await appendEvidence(deal.id, {
     kind: 'shipment',
@@ -85,7 +107,27 @@ export async function shipForDeal(
     byRole: 'seller',
     at: Date.now(),
   });
+
+  // Filed separately and under the arbiter's role, because the seller did not
+  // say it. Keeping it in its own entry is what lets a reader see which lines
+  // are claims and which are not.
+  if (check) await appendEvidence(deal.id, checkEvidence(proof.trackingNumber, check, deal.sellerUid));
+
   await updateDealStatus(deal.id, 'shipped');
+}
+
+/**
+ * Re-checks a waybill after shipping, for the buyer or the arbiter.
+ *
+ * Deliberately does not touch the deal status. A courier saying "delivered"
+ * means a parcel reached an address; it does not mean the oil matches the
+ * sample, and releasing on a delivery scan would pay a seller for shipping a
+ * brick. The buyer still confirms.
+ */
+export async function recheckShipment(deal: Deal, trackingNumber: string, byUid: string) {
+  const check = await checkShipment(trackingNumber);
+  await appendEvidence(deal.id, checkEvidence(trackingNumber, check, byUid));
+  return check;
 }
 
 export async function approveForDeal(deal: Deal, note: string) {
