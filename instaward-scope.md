@@ -1,9 +1,9 @@
-# Instaward request — wafiqr: the last mile to rupiah
+# Instaward request — wafiqr: make the shipment evidence checkable
 
 **Builder:** Dian Bilhokista
 **Chapter:** Stellar Ambassador Chapter Indonesia
 **Project:** wafiqr — cross-border trade escrow on Stellar
-**Repository:** <https://github.com/bilhokista/wafiqr>
+**Repository:** <https://github.com/bilhokista/wafiqr> · **Live:** <https://wafiqr.web.app>
 **Sprint:** 30 days
 **Network:** Testnet throughout
 
@@ -13,134 +13,152 @@
 
 wafiqr is a marketplace where a small Indonesian producer sells across a border
 for the first time and the payment waits in a Stellar escrow until the goods
-arrive. It works end to end on testnet today. What it cannot do is finish: when
-the escrow releases, the seller holds USDC in a Stellar account, and a producer
-in a village cannot spend USDC, cannot show it to a bank, and cannot report it
-as export proceeds. This sprint builds the leg that turns a released escrow into
-rupiah in their bank account, through a licensed provider, with a record their
-accountant can read.
+arrive. It runs end to end on testnet today. Its weakest link is not the money —
+that part works — it is the evidence: the seller typed a tracking number as free
+text, nobody checked it, and the escrow carried it as proof. This sprint makes
+the shipment evidence checkable by asking the courier, so a waybill that does
+not exist becomes visible to the buyer and the arbiter instead of sitting in the
+record looking like proof.
 
 ## What already runs
 
-Verified on testnet on 2026-09-20:
+Verified on Stellar testnet on 2026-09-20:
 
 | Path | Contract | Result |
 |---|---|---|
-| Happy | `CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK` | seller +9.97 USDC |
-| Dispute | `CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV` | buyer 7, seller 3 |
+| Settled | `CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK` | seller +9.97 USDC |
+| Disputed | `CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV` | arbiter split: buyer 7, seller 3 |
 
-Escrow runs through Trustless Work single-release contracts in USDC. The trade
-terms — quantity, grade, Incoterm, ship-by date, named arbiter — are written
-into the contract and frozen at creation. The seller files shipping evidence
-against the milestone; a dispute goes to an arbiter both sides accepted before
-the money moved.
+Escrow runs through Trustless Work single-release contracts in USDC. Trade terms
+— quantity, grade, Incoterm, ship-by date, named arbiter — are written into the
+contract and frozen at creation. A dispute goes to an arbiter both sides
+accepted before the money moved.
 
-Built ahead of this request, and already in the repository:
+Built ahead of this request and already in the repository:
 
-- `OfframpProvider` — the interface a licensed provider plugs into
-- Payout and settlement types carrying the fields DHE reporting needs
-- `repatriationCheck` — reports when a payout cannot carry the obligation
-- Payout persistence with its own rules, read-restricted to the two parties
-- The deal-room payout panel, replacing a screen that told the seller they had
-  been paid when they had not
-- A third leg in the end-to-end script asserting the payout path reaches an
-  honest refusal rather than a fabricated success
+- `CourierProvider` — the interface a carrier plugs into
+- A DHL adapter against Shipment Tracking Unified
+- Refusal of a waybill the courier has never seen, at filing time
+- The courier's reading written on chain beside the seller's note, and filed as
+  its own evidence entry under a `courier` badge
+- `recheckShipment` for the buyer and the arbiter, which deliberately does not
+  move the deal status
 
-## Why nobody has closed this
+## The problem, concretely
 
-Of 43 Stellar anchors in the ecosystem directory, none serves Indonesia.
+An escrow between strangers releases when one party asserts the other
+performed. Today that assertion is a string:
 
-That is not an oversight. Under Law No. 4/2026 the minimum registered capital
-for a digital asset exchange licence is Rp 500 billion, and on-ramps and
-off-ramps must run through Indonesian banks or licensed e-wallets. Supervision
-moved from Bappebti to OJK in January 2025.
+```
+Tracking number:  DHL 1234567890
+```
 
-So nobody builds the Indonesian anchor, and every Indonesian seller in every
-Stellar marketplace is left holding USDC.
+Nothing checks it exists. A seller can type anything, and the buyer — who is
+abroad, has never met them, and is deciding whether to confirm delivery — has
+no way to tell a real waybill from an invented one.
 
-The way through is not to become the exchange. wafiqr never takes custody: a
-licensed provider quotes, the seller authorises, the provider holds the funds
-under their licence for the length of the conversion, and wafiqr records what
-came back.
+The escrow holds the money correctly and holds the claims about the goods on
+faith. For a product whose entire offer is trust, that is the wrong way round.
 
-## The requirement outsiders miss
+## What checking buys
 
-Indonesian exporters of natural resources must repatriate 100% of export
-proceeds to an account at a state-owned bank and hold them twelve months
-(PP 21/2026, PBI No. 5/2026). Essential oils, coffee and spices — the catalogue
-wafiqr was built for — sit inside or near that definition.
+| Today | After |
+|---|---|
+| "Shipped" because the seller says so | the waybill exists and the courier says so |
+| Arbiter reads two accounts | arbiter reads one fact neither party wrote |
+| An invented number looks like proof | an invented number is refused at filing |
 
-A payout ending in a crypto wallet leaves the exporter unable to show
-compliance. The party in breach would be the producer using the tool, not the
-tool. That is worse, because the harm lands on whoever can least absorb it.
-
-Any credible payout path for this corridor ends at an onshore account, with a
-record the exporter can file against. That is the part a foreign team would not
-think to build, because they do not know the rule exists.
+The distinction the deal room now draws — which lines are claims and which came
+from outside the deal — is the whole point.
 
 ## Sprint deliverables
 
-1. **A provider adapter** against one licensed off-ramp that reaches Stellar,
-   behind the existing `OfframpProvider` interface.
-2. **Settlement recording** — the provider's account of the onshore leg written
-   into the evidence trail, readable by buyer, seller and arbiter.
-3. **One full testnet run**: escrow funded, goods shipped, released, converted,
-   rupiah confirmed in an Indonesian bank account, recorded.
-4. **A written finding** on IDR-to-Stellar routing, for the chapter and SDF,
-   whichever way it goes.
+1. **A live DHL adapter** on the free Shipment Tracking Unified tier, moved
+   behind a server-side proxy so the key does not ship in the bundle.
+2. **A second carrier** through KiriminAja, which fronts JNE, J&T and SiCepat,
+   so a domestic leg is checkable too.
+3. **Re-check from the deal room** for buyer and arbiter, with every reading
+   written into the evidence trail under its own badge.
+4. **One full testnet run with a real waybill**: filed, checked, disputed, and
+   resolved by an arbiter reading a courier line neither party wrote.
 
 ## Out of scope, deliberately
 
-- wafiqr taking custody at any point. That is the Rp 500 billion question and
-  the answer is no.
+- **Releasing money on a delivery scan.** A courier saying "delivered" means a
+  parcel reached an address, not that the oil matches the sample. Automating
+  release on a scan would hand every seller a way to be paid for shipping a
+  brick. The buyer still confirms.
 - Mainnet.
-- Filing anything with customs on the exporter's behalf. The record supports
-  their filing; it does not replace it.
-- Buyer-side on-ramp. Buyers are abroad and already served.
+- Customs filing. The record supports the exporter's filing; it does not
+  replace it.
+- The rupiah payout, which is the follow-on below rather than this sprint.
 
 ## Success criteria
 
 Evaluated at the end of the sprint:
 
-- **Passes** if one deal runs from escrow release to rupiah confirmed in an
-  Indonesian bank account, with the settlement visible in the evidence trail to
-  all three parties, and the repatriation check reporting correctly for both a
-  state and a non-state bank.
-- **Fails** if no licensed provider can be reached for IDR settlement on Stellar
-  within the sprint.
+- **Passes** if a real waybill from one live carrier is filed, checked and
+  recorded; an invented number is refused with the courier named; and an
+  arbiter resolves a dispute reading a courier line neither party wrote.
+- **Fails** if no carrier can be reached, or if a check cannot distinguish a
+  waybill that does not exist from one that is merely early.
 
-The failure mode is named because it is the real risk. If no provider routes IDR
-to Stellar today, that is a finding the Indonesian chapter and SDF should have,
-and the adapter interface is what the next team starts from instead of starting
-over.
+The second failure matters more than the first. A check that cannot tell those
+apart is worse than no check, because it would refuse honest sellers whose
+parcel has not been collected yet — and being wrongly refused once is enough for
+a first-time seller to stop.
 
-## Two assumptions, stated rather than hidden
+## Follow-on: the rupiah payout
 
-Both are cheap to settle and neither blocks the interface work:
+Proposed as the next disbursement rather than this sprint, because it is blocked
+on an answer nobody here has yet.
 
-1. **Whether any licensed provider currently routes IDR to the Stellar
-   network.** Alchemy Pay is listed in the Stellar Anchor Directory as an
-   on/off-ramp for XLM and USDC, and is one of fifteen providers listed for
-   Indonesia alongside GoPay, OVO, ShopeePay and QRIS. The intersection — IDR
-   settling on Stellar — has not been confirmed by anyone here.
+When the escrow releases, the seller holds USDC in a Stellar account. A producer
+in a village cannot spend that, show it to a bank, or report it as export
+proceeds. The interface, types, repatriation check, security rules, deal-room
+panel and end-to-end assertions are built and in the repository. What is missing
+is one licensed provider that routes IDR to the Stellar network.
 
-2. **Whether essential oils fall inside the SDA definition, and above which
-   value threshold.** A customs broker answers this in one call. The answer
-   changes who the product serves, not whether it works.
+Of 43 Stellar anchors in the ecosystem directory, none serves Indonesia. Under
+Law No. 4/2026 the minimum registered capital for a digital asset exchange
+licence is Rp 500 billion, so wafiqr never takes custody — a licensed provider
+does, for the length of the conversion, and wafiqr records what came back.
 
-Both are first-week work, not last-week work.
+Alchemy Pay is listed in the Stellar Anchor Directory for XLM and USDC, and is
+one of fifteen providers listed for Indonesia alongside GoPay, OVO, ShopeePay
+and QRIS. Whether IDR actually settles on Stellar through any of them is the
+open question, and it is one sitting with a widget, not a sprint.
 
-## What the ecosystem gets either way
+Indonesian exporters of natural resources must repatriate proceeds to a
+state-owned bank account (PP 21/2026, PBI No. 5/2026), so any payout path here
+ends onshore. Whether a parcel-scale exporter sits above that threshold is the
+second thing to settle, and a customs broker answers it in one call.
 
-An Indonesian payout path that other Stellar products can copy, or a documented
-answer for why there is not one yet. Indonesia is the largest economy in
-Southeast Asia and the only major corridor with no Stellar anchor. The Philippines
-has Coins PH; Peru received an SCF Build award in round 44 for exactly this
-shape of work on the SDF Anchor Platform.
+## What is assumed here, stated rather than hidden
+
+The customer is read as a parcel-scale exporter — five litres in two tins,
+shipped by DHL or Lion Parcel — rather than a container exporter. That reading
+comes from which shipping services Indonesian sellers are actually sold, which
+is desk research and buys nothing on its own. Nobody has asked an exporter what
+they ship, or what went wrong last time.
+
+It matters because it sets which carriers to reach for first, and because the
+repatriation threshold probably does not bind a parcel shipment. Both are
+first-week questions, not last-week ones.
+
+## What the ecosystem gets
+
+A pattern any Stellar escrow can copy: independent evidence, from a party with
+no stake in the deal, written into the contract's own record.
+
+Escrows on every chain release on one party asserting the other performed.
+Making that assertion checkable is not specific to wafiqr, to Indonesia, or to
+trade — it is what makes an escrow between strangers worth more than a promise.
 
 ---
 
 *References: [Instaward rules](https://stellar.gitbook.io/scf-handbook/scf-awards/instawards/official-rules) ·
+[DHL Shipment Tracking Unified](https://developer.dhl.com/tracking) ·
+[KiriminAja Open API](https://developer.kiriminaja.com/) ·
 [PP 21/2026 on DHE SDA](https://siplawfirm.id/resources/dhe-sda-2026-pp-21-2026-aturan-eksportir) ·
-[PBI No. 5/2026](https://www.bi.go.id/id/publikasi/peraturan/Pages/PBI_052026.aspx) ·
-[Alchemy Pay on Stellar](https://alchemypay.org/news-and-press/alchemy-pay-joins-stellar-ecosystem-to-offer-ramp-service-for-developers-and-dapps)*
+[PBI No. 5/2026](https://www.bi.go.id/id/publikasi/peraturan/Pages/PBI_052026.aspx)*
