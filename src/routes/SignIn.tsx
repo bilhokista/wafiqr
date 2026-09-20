@@ -7,7 +7,7 @@ import { Action, Eyebrow, Field, Notice, Shell, Spinner } from '../ui/kit';
 import { ArrowUpRight } from '../ui/icons';
 
 export function SignIn() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state?: { next?: string } };
   const next = location.state?.next ?? '/deals';
@@ -21,12 +21,13 @@ export function SignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  async function submit() {
+  // One path in and out for every sign-in route, so a Google failure reads the
+  // same as an email one and neither can forget to clear the spinner.
+  async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError('');
     try {
-      if (mode === 'in') await signIn(email, password);
-      else await signUp({ email, password, displayName, role, country });
+      await fn();
       navigate(next);
     } catch (e) {
       setError(readableAuthError(e as Error));
@@ -34,6 +35,12 @@ export function SignIn() {
       setBusy(false);
     }
   }
+
+  const submit = () =>
+    run(async () => {
+      if (mode === 'in') await signIn(email, password);
+      else await signUp({ email, password, displayName, role, country });
+    });
 
   return (
     <main className="mx-auto max-w-lg px-4 py-20 md:py-32">
@@ -43,6 +50,26 @@ export function SignIn() {
           <h1 className="mt-4 text-3xl leading-tight">
             {mode === 'in' ? 'Sign in to your deals.' : 'Trade with people you have not met yet.'}
           </h1>
+
+          {/* Placed above the form on purpose. Inventing a password for a site
+              you have never heard of is where people leave, and almost everyone
+              this is built for already has a Google account on their phone. */}
+          <div className="mt-8">
+            <Action
+              full
+              variant="ghost"
+              disabled={busy}
+              trailing={busy ? <Spinner /> : undefined}
+              onClick={() => run(() => signInWithGoogle(role, country || 'Indonesia'))}
+            >
+              Continue with Google
+            </Action>
+            <div className="mt-6 flex items-center gap-3 text-[11px] uppercase tracking-wide text-ink-mute">
+              <span className="h-px flex-1 bg-ink/10" />
+              or use an email
+              <span className="h-px flex-1 bg-ink/10" />
+            </div>
+          </div>
 
           <div className="mt-8 space-y-4">
             {mode === 'up' && (
@@ -115,5 +142,13 @@ function readableAuthError(e: Error): string {
   if (code.includes('weak-password')) return 'Use a password of at least six characters.';
   if (code.includes('invalid-email')) return 'That email address does not look right.';
   if (code.includes('network')) return 'The network dropped. Check the connection and try again.';
+  // Closing the Google window is a decision, not a fault. Saying "popup closed
+  // by user" back to someone who just closed it reads like a malfunction.
+  if (code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request'))
+    return 'Google sign-in was closed before it finished.';
+  if (code.includes('popup-blocked'))
+    return 'The browser blocked the Google window. Allow popups for this site, or use an email below.';
+  if (code.includes('operation-not-allowed'))
+    return 'That sign-in method is switched off for this project.';
   return e.message;
 }

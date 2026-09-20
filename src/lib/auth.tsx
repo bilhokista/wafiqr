@@ -1,9 +1,17 @@
-// Auth context: email/password accounts with a Stellar wallet linked on the profile.
-// A village producer can register before they own a wallet, then link one later.
+// Auth context. A Stellar wallet is linked on the profile, not at sign-up, so a
+// village producer can register before they own one.
+//
+// Two ways in, and Google is the one that matters here. Asking a producer to
+// invent and remember a password for a site they have never heard of is a step
+// where people leave, and almost everyone this product is for already has a
+// Google account on the phone in their hand. Email and password stay for buyers
+// abroad who prefer them, and for anyone without one.
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as fbSignOut,
   onAuthStateChanged,
   updateProfile,
@@ -19,6 +27,12 @@ interface AuthValue {
   loading: boolean;
   signUp: (input: SignUpInput) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  /**
+   * Google sign-in, for both first visit and return. Google decides which it is,
+   * so the caller does not have to ask someone whether they already have an
+   * account — a question people get wrong about themselves.
+   */
+  signInWithGoogle: (role: 'buyer' | 'seller', country: string) => Promise<void>;
   signOut: () => Promise<void>;
   linkWallet: () => Promise<string>;
   refreshProfile: () => Promise<void>;
@@ -75,6 +89,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signIn(email, password) {
         await signInWithEmailAndPassword(auth, email, password);
+      },
+      async signInWithGoogle(role, country) {
+        const credential = await signInWithPopup(auth, new GoogleAuthProvider());
+        const existing = await loadUserProfile(credential.user.uid);
+
+        // A returning account keeps the role and country it already chose. Only
+        // the first sign-in writes them, so signing in again cannot silently
+        // turn a seller into a buyer.
+        if (existing) {
+          setProfile(existing);
+          return;
+        }
+
+        const fresh: UserProfile = {
+          uid: credential.user.uid,
+          email: credential.user.email ?? '',
+          displayName: credential.user.displayName ?? credential.user.email ?? 'Unnamed',
+          role,
+          country,
+          walletAddress: '',
+          createdAt: Date.now(),
+        };
+        await saveUserProfile(fresh);
+        setProfile(fresh);
       },
       async signOut() {
         await fbSignOut(auth);
