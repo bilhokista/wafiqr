@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { Action, Eyebrow, Reveal, Shell } from '../ui/kit';
 import { ArrowUpRight, Scale, Shield, Ship, Wallet } from '../ui/icons';
+import { Proof } from '../ui/Proof';
 
 const STAGES = [
   {
@@ -94,6 +95,12 @@ export function How() {
             </div>
           </Shell>
         </section>
+      </Reveal>
+
+      <Reveal delay={140}>
+        <div className="mt-24">
+          <Proof />
+        </div>
       </Reveal>
 
       <Reveal delay={160}>

@@ -11,6 +11,10 @@ const CATEGORIES = ['all', 'spice', 'coffee', 'craft', 'textile'] as const;
 
 export function Market() {
   const [listings, setListings] = useState<Listing[]>([]);
+  // Whether what is on screen is the demo shelf rather than real producers.
+  // A buyer who orders from an example and finds nobody there is a buyer lost
+  // for good, and this product is selling trust.
+  const [seeded, setSeeded] = useState(false);
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [loading, setLoading] = useState(true);
 
@@ -20,8 +24,16 @@ export function Market() {
     listActiveListings(category === 'all' ? undefined : category)
       // An empty or unreachable catalog still shows the seeded demo goods, so the
       // marketplace is never a blank page during a pitch.
-      .then((rows) => live && setListings(rows.length ? rows : filterSeed(category)))
-      .catch(() => live && setListings(filterSeed(category)))
+      .then((rows) => {
+        if (!live) return;
+        setSeeded(rows.length === 0);
+        setListings(rows.length ? rows : filterSeed(category));
+      })
+      .catch(() => {
+        if (!live) return;
+        setSeeded(true);
+        setListings(filterSeed(category));
+      })
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
@@ -102,6 +114,18 @@ export function Market() {
             ))}
           </div>
         </div>
+
+        {!loading && seeded && (
+          <div className="mb-6 rounded-2xl border border-ink/10 px-4 py-3 text-[12px] leading-relaxed text-ink-mute">
+            These are example lots, shown so the market is not a blank page. No producer has
+            listed yet, so nothing here can be ordered — the escrow behind it is real and ran on
+            testnet, and you can read both runs on the{' '}
+            <Link to="/how" className="underline underline-offset-2 transition-colors duration-500 ease-fluid hover:text-ink">
+              how it works
+            </Link>{' '}
+            page.
+          </div>
+        )}
 
         {loading ? (
           <div className="grid gap-4 md:grid-cols-12">
