@@ -2,8 +2,10 @@
 // Runs both paths against Trustless Work and prints the StellarExpert links:
 //   happy:   deploy -> fund -> seller marks shipped (evidence) -> buyer approves -> release to seller
 //   dispute: deploy -> fund -> buyer disputes -> arbiter splits the funds
+//   payout:  release -> the last mile, which is where the seller actually gets paid
 //
-// Usage: node scripts/e2e-testnet.mjs
+// Usage: node --experimental-strip-types scripts/e2e-testnet.mjs
+// Payout leg alone, no network and no testnet spend: PAYOUT_ONLY=1
 // Resolve a dispute opened from the widget: RESUME_DISPUTE=<contractId> node scripts/e2e-testnet.mjs
 // Keys are generated once into scripts/.testnet-wallets.json (gitignored, testnet only).
 import fs from 'node:fs';
@@ -202,9 +204,70 @@ async function disputePath() {
   return { contractId, escrowBalance: balance, toBuyer, toSeller };
 }
 
+/**
+ * The leg after release, which is the one the seller cares about.
+ *
+ * Release puts USDC in the seller's Stellar account, and this script used to
+ * stop there printing "seller +10 USDC" as if that were payment. For a producer
+ * who cannot spend USDC it is not, so this asserts what happens next.
+ *
+ * With no licensed provider connected the correct behaviour is a refusal that
+ * says why. A run that quietly produced a quote here would mean someone had
+ * wired in a mock, and a mock rate is indistinguishable from a real one on a
+ * seller's screen.
+ */
+async function payoutLeg() {
+  const { quoteForDeal, repatriationCheck, activeProvider } = await import(
+    new URL('../src/lib/payout.ts', import.meta.url).href
+  );
+
+  // A state bank satisfies the placement requirement; anything else does not,
+  // and the difference has to be legible to the seller rather than a bare no.
+  const himbara = repatriationCheck('bank', 'BMRI');
+  const other = repatriationCheck('bank', 'BCA');
+  const wallet = repatriationCheck('wallet', 'BMRI');
+
+  if (!himbara.ok) throw new Error(`Mandiri should satisfy placement: ${himbara.reason}`);
+  if (other.ok) throw new Error('A non-state bank must not satisfy placement.');
+  if (wallet.ok) throw new Error('A wallet payout must not satisfy placement.');
+
+  // The refusal is the assertion. Reaching a quote without a licensed provider
+  // would mean the seller is being shown a number nobody can honour.
+  let refusal = '';
+  try {
+    await quoteForDeal(
+      { id: 'payout-leg', amount: AMOUNT },
+      { usdcAmount: AMOUNT, bankAccount: '1234567890', bankCode: 'BMRI' },
+    );
+    throw new Error('A quote succeeded with no provider configured. Something is mocked.');
+  } catch (e) {
+    refusal = e.message;
+    if (!/licensed/i.test(refusal)) throw e;
+  }
+
+  return {
+    provider: activeProvider().name,
+    checks: 'repatriation: BMRI ok, BCA refused, wallet refused',
+    refusal,
+    walletReason: wallet.reason,
+  };
+}
+
+function reportPayout(payout) {
+  console.log('');
+  console.log('PAYOUT  provider:', payout.provider);
+  console.log('        ', payout.checks);
+  console.log('        refused:', payout.refusal);
+  console.log('        ', payout.walletReason);
+}
+
 const expert = (id) => `https://stellar.expert/explorer/testnet/contract/${id}`;
 
 async function main() {
+  // The payout leg needs no network and no testnet balance, so it can be run
+  // on its own while the rest of the script costs real testnet operations.
+  if (process.env.PAYOUT_ONLY) return reportPayout(await payoutLeg());
+
   console.log('buyer  ', pub('buyer'));
   console.log('seller ', pub('seller'));
   console.log('arbiter', pub('arbiter'));
@@ -223,6 +286,10 @@ async function main() {
   const dispute = await disputePath();
   console.log('\nDISPUTE', dispute.contractId, `balance ${dispute.escrowBalance}, buyer ${dispute.toBuyer}, seller ${dispute.toSeller}`);
   console.log('        ', expert(dispute.contractId));
+
+  // Release is not payment. Say so where this script used to stop and call it
+  // done.
+  reportPayout(await payoutLeg());
 }
 
 main().catch((e) => {
