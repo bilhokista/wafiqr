@@ -1,0 +1,73 @@
+rules_version = '2';
+
+// Trade data is public to read — a buyer must be able to inspect a lot and a deal
+// before trusting it — but only the parties to a record may write it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['buyer', 'seller'];
+      allow delete: if false;
+    }
+
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isSelf(request.resource.data.sellerUid)
+        && request.resource.data.pricePerUnit is number
+        && request.resource.data.pricePerUnit >= 0
+        && request.resource.data.minOrder is number
+        && request.resource.data.minOrder > 0;
+      // A seller may edit their own lot but never reassign it to someone else.
+      allow update: if isSelf(resource.data.sellerUid)
+        && request.resource.data.sellerUid == resource.data.sellerUid;
+      allow delete: if isSelf(resource.data.sellerUid);
+    }
+
+    match /deals/{dealId} {
+      function isParty() {
+        return signedIn()
+          && (request.auth.uid == resource.data.buyerUid || request.auth.uid == resource.data.sellerUid);
+      }
+
+      allow read: if true;
+
+      // The buyer opens the deal, and the money figure must match the line items.
+      allow create: if isSelf(request.resource.data.buyerUid)
+        && request.resource.data.status == 'draft'
+        && request.resource.data.contractId == ''
+        && request.resource.data.evidence.size() == 0
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity > 0
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+
+      // Terms are frozen once the deal exists. Only status, contract id, evidence
+      // and the timestamp may move, and only a party to the trade may move them.
+      allow update: if isParty()
+        && request.resource.data.buyerUid == resource.data.buyerUid
+        && request.resource.data.sellerUid == resource.data.sellerUid
+        && request.resource.data.buyerWallet == resource.data.buyerWallet
+        && request.resource.data.sellerWallet == resource.data.sellerWallet
+        && request.resource.data.arbiterWallet == resource.data.arbiterWallet
+        && request.resource.data.amount == resource.data.amount
+        && request.resource.data.quantity == resource.data.quantity
+        && request.resource.data.specs == resource.data.specs
+        && request.resource.data.incoterm == resource.data.incoterm
+        && request.resource.data.shipBy == resource.data.shipBy;
+
+      allow delete: if false;
+    }
+
+  }
+}

@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display font-light tracking-[-0.02em];
+  }
+  ::selection {
+    @apply bg-spice/15;
+  }
+}
+
+@layer components {
+  /* Outer shell of the double-bezel: the machined tray a card sits in. */
+  .shell {
+    @apply rounded-squircle bg-paper-deep/60 p-1.5 ring-1 ring-ink/[0.06];
+  }
+  .core {
+    @apply rounded-core bg-paper shadow-core;
+  }
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-ink/[0.04] px-3 py-1
+           text-[10px] font-medium uppercase tracking-[0.2em] text-ink-mute;
+  }
+  .field {
+    @apply w-full rounded-2xl bg-paper-deep/70 px-4 py-3 text-sm text-ink
+           ring-1 ring-ink/[0.07] outline-none transition-all duration-500 ease-fluid
+           placeholder:text-ink-mute/70 focus:bg-paper focus:ring-spice/40;
+  }
+  .label {
+    @apply mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-ink-mute;
+  }
+}
+
+/* Film-grain overlay: fixed and inert so it never repaints with scroll. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Scroll entry: heavy fade-up, transform and opacity only. */
+.reveal {
+  opacity: 0;
+  transform: translateY(2.5rem);
+  filter: blur(6px);
+  transition: opacity 900ms cubic-bezier(0.32, 0.72, 0, 1),
+              transform 900ms cubic-bezier(0.32, 0.72, 0, 1),
+              filter 900ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; filter: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
