@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "srekan-collabs"
+  },
+  "targets": {
+    "srekan-collabs": {
+      "hosting": {
+        "wafiqr": [
+          "wafiqr"
+        ]
+      }
+    }
   }
 }
