@@ -82,9 +82,15 @@ export async function getDeal(id: string): Promise<Deal | null> {
 }
 
 /** Live deal view — the buyer sees the seller's shipment proof without reloading. */
-export function watchDeal(id: string, onChange: (deal: Deal | null) => void) {
-  return onSnapshot(doc(db, DEALS, id), (snap) =>
-    onChange(snap.exists() ? { ...(snap.data() as Deal), id: snap.id } : null),
+export function watchDeal(
+  id: string,
+  onChange: (deal: Deal | null) => void,
+  onError?: (e: Error) => void,
+) {
+  return onSnapshot(
+    doc(db, DEALS, id),
+    (snap) => onChange(snap.exists() ? { ...(snap.data() as Deal), id: snap.id } : null),
+    (e) => onError?.(e as Error),
   );
 }
 

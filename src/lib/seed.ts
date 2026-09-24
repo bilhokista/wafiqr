@@ -22,8 +22,9 @@ export const SEED_LISTINGS: Listing[] = [
     specs: 'GC-MS report included · myristicin 8–11% · steam distilled, 2025 harvest',
     description:
       'Distilled in small copper stills within a day of the harvest, so the oil keeps the warm, sweet top note that bulk lots lose in transit.',
-    imageUrl:
-      'https://images.unsplash.com/photo-1600857062241-98e5dba7f214?auto=format&fit=crop&w=1200&q=70',
+    // No photo until a real one is sourced: the previous stock URL rendered a
+    // handbag, and a wrong picture on a trust product is worse than none.
+    imageUrl: '',
     active: true,
     createdAt: Date.now() - 86400000 * 3,
   },

@@ -1,7 +1,8 @@
 rules_version = '2';
 
-// Trade data is public to read — a buyer must be able to inspect a lot and a deal
-// before trusting it — but only the parties to a record may write it.
+// Lots are public to read — a buyer must be able to inspect the goods before
+// trusting a stranger — but deals are private to their two parties, and only
+// the parties to a record may write it.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -27,10 +28,19 @@ service cloud.firestore {
         && request.resource.data.pricePerUnit is number
         && request.resource.data.pricePerUnit >= 0
         && request.resource.data.minOrder is number
-        && request.resource.data.minOrder > 0;
-      // A seller may edit their own lot but never reassign it to someone else.
+        && request.resource.data.minOrder > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.specs is string
+        && request.resource.data.specs.size() > 0
+        && request.resource.data.category in ['spice', 'coffee', 'craft', 'textile']
+        && request.resource.data.leadTimeDays is number
+        && request.resource.data.leadTimeDays > 0;
+      // A seller may edit their own lot but never reassign it to someone else,
+      // and never point the payout at a different wallet mid-sale.
       allow update: if isSelf(resource.data.sellerUid)
-        && request.resource.data.sellerUid == resource.data.sellerUid;
+        && request.resource.data.sellerUid == resource.data.sellerUid
+        && request.resource.data.sellerWallet == resource.data.sellerWallet;
       allow delete: if isSelf(resource.data.sellerUid);
     }
 
@@ -40,7 +50,8 @@ service cloud.firestore {
           && (request.auth.uid == resource.data.buyerUid || request.auth.uid == resource.data.sellerUid);
       }
 
-      allow read: if true;
+      // Deals are private: only the buyer and the seller who opened them may read.
+      allow read: if isParty();
 
       // The buyer opens the deal, and the money figure must match the line items.
       allow create: if isSelf(request.resource.data.buyerUid)

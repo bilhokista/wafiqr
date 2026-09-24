@@ -47,8 +47,16 @@ export function Lot() {
     [listing, quantity],
   );
 
+  // Seeded lots are shelf dressing until real producers list. The market says
+  // so in words; the order form enforces it so an example can never become a deal.
+  const isDemo = listing?.id.startsWith('seed-') ?? false;
+
   async function startDeal() {
     if (!listing) return;
+    if (listing.id.startsWith('seed-')) {
+      setError('This is an example lot — ordering opens once real producers list.');
+      return;
+    }
     if (!user || !profile) {
       navigate('/signin', { state: { next: `/lot/${id}` } });
       return;
@@ -189,11 +197,16 @@ export function Lot() {
                     <Row label="Escrow holds" value={usdc(total)} strong />
                   </dl>
 
+                  {isDemo && (
+                    <div className="mt-5">
+                      <Notice tone="info">Example lot for demo. Ordering opens once real producers list.</Notice>
+                    </div>
+                  )}
                   {error && <div className="mt-5"><Notice tone="error">{error}</Notice></div>}
 
                   <div className="mt-7">
-                    <Action full trailing={busy ? <Spinner /> : <ArrowUpRight size={13} />} disabled={busy} onClick={startDeal}>
-                      {busy ? 'Opening deal room' : 'Open the deal room'}
+                    <Action full trailing={busy ? <Spinner /> : <ArrowUpRight size={13} />} disabled={busy || isDemo} onClick={startDeal}>
+                      {busy ? 'Opening deal room' : isDemo ? 'Example — not orderable' : 'Open the deal room'}
                     </Action>
                   </div>
                   <p className="mt-4 text-[11px] leading-relaxed text-ink-mute">

@@ -47,13 +47,14 @@ but accounts, publishing and deals are unavailable.
 
 ```bash
 firebase use --add                 # pick or create the project
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,firestore:indexes
 npm run build && firebase deploy --only hosting
 ```
 
 Enable **Email/Password** under Authentication before signing anyone up.
 
-Security rules live in `firestore.rules` and `storage.rules`. The shape they enforce:
+Security rules live in `firestore.rules`. Listing photos are stored inline in the
+listing document (see `src/lib/image.ts`), so there is no `storage.rules` to deploy. The shape they enforce:
 listings and deals are publicly readable, a seller may only write their own listing, and a
 deal's commercial terms cannot change after creation — only status, contract id and evidence.
 

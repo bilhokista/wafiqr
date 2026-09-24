@@ -6,7 +6,7 @@
 //
 // Usage: node --experimental-strip-types scripts/e2e-testnet.mjs
 // Payout leg alone, no network and no testnet spend: PAYOUT_ONLY=1
-// Resolve a dispute opened from the widget: RESUME_DISPUTE=<contractId> node scripts/e2e-testnet.mjs
+// Resolve a dispute opened from the app: RESUME_DISPUTE=<contractId> node scripts/e2e-testnet.mjs
 // Keys are generated once into scripts/.testnet-wallets.json (gitignored, testnet only).
 import fs from 'node:fs';
 import path from 'node:path';

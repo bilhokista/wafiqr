@@ -42,10 +42,18 @@ export function DealRoom() {
   const [reason, setReason] = useState('');
 
   useEffect(() => {
-    const stop = watchDeal(id, (next) => {
-      setDeal(next);
-      setLoading(false);
-    });
+    const stop = watchDeal(
+      id,
+      (next) => {
+        setDeal(next);
+        setLoading(false);
+      },
+      () => {
+        // Deals are private: anyone outside the two parties lands here.
+        setError('This deal is private — only its buyer and seller can open it.');
+        setLoading(false);
+      },
+    );
     return stop;
   }, [id]);
 
@@ -73,7 +81,7 @@ export function DealRoom() {
   if (!deal) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-32 md:px-8">
-        <h1 className="text-4xl">No such deal.</h1>
+        <h1 className="text-4xl">{error || 'No such deal.'}</h1>
         <Link to="/deals" className="mt-8 inline-block"><Action variant="ghost">My deals</Action></Link>
       </div>
     );
@@ -106,7 +114,7 @@ export function DealRoom() {
       </header>
 
       {role === 'watcher' && (
-        <div className="mt-8"><Notice tone="info">You are viewing this deal as an observer. Only the buyer and the seller can act on it.</Notice></div>
+        <div className="mt-8"><Notice tone="info">Deals are private. Only the buyer and the seller can act on this one.</Notice></div>
       )}
       {overdue && (
         <div className="mt-8"><Notice tone="error">The ship-by date has passed and no shipment evidence has been filed. The buyer may open a dispute.</Notice></div>

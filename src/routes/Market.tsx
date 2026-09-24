@@ -191,6 +191,7 @@ function ListingCard({ listing, wide }: { listing: Listing; wide: boolean }) {
             <div className="flex items-center gap-2">
               <Badge>{listing.category}</Badge>
               <Badge tone="good">{listing.incoterm}</Badge>
+              {listing.id.startsWith('seed-') && <Badge tone="warn">example</Badge>}
             </div>
             <h3 className="text-[22px] leading-tight">{listing.title}</h3>
             <p className="text-[12px] text-ink-mute">
