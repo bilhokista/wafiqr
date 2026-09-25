@@ -73,9 +73,46 @@ that the goods match the sample, and the buyer still confirms.
 
 ### Stellar
 
-A buyer needs a Freighter wallet, a USDC trustline and testnet USDC. The deal room has a
-button for each. The arbiter must be a third account: the contract rejects a dispute opened
-by its own dispute resolver.
+Set `VITE_STELLAR_NETWORK` to `testnet` (the default) or `mainnet`. Everything that differs —
+passphrase, Horizon, the Trustless Work API, the real USDC issuer — comes from
+`src/lib/network.ts`. Mainnet will not start without `VITE_ARBITER_ADDRESS`. The arbiter must
+be a third account: the contract rejects a dispute opened by its own dispute resolver.
+
+## Money in, money out, without a licence
+
+wafiqr never holds anyone's money, never holds a key that can spend it, and never converts
+currency. Every step that needs a licence is done by a party that has one, with the user as
+their customer.
+
+- **Wallets.** A user without Freighter gets a wallet made in their browser
+  (`embeddedWallet.ts`). The secret is sealed under their passphrase with PBKDF2-SHA256 and
+  AES-GCM (`vault.ts`) before it is stored, on the device and in Firestore for recovery. wafiqr
+  stores a box it has no key to. Freighter still works for anyone who has it.
+- **Paying in.** The buyer buys XLM or USDC at a licensed exchange or ramp they already use —
+  QRIS, virtual account, card — and withdraws to their own wallet. The deal room watches for the
+  deposit, adds the USDC trustline and swaps XLM to USDC on the Stellar DEX (`topup.ts`).
+- **Paying out.** After release the seller sends the USDC to their own account at a licensed
+  exchange, converted to XLM on the way in one path payment with the exchange's memo
+  (`cashout.ts`). They sell and withdraw to their bank there. The direct-to-bank rail
+  (`payout.ts`) stays in place for when a licensed off-ramp partner is contracted.
+- **Nothing is signed blind.** Every escrow transaction comes back from the Trustless Work API
+  as unsigned XDR. `txGuard.ts` decodes it and refuses to sign unless the signer, contract,
+  function, amount, receiver, arbiter, token and fee all match the deal. Before funding,
+  `escrowCode.ts` asks Soroban RPC — not the API — which code the escrow contract runs, and
+  funds only the Trustless Work WASM this app has checked.
+- **Only across a border.** Law 4/2026 forbids a stablecoin as a means of payment inside
+  Indonesia. A deal between two parties in Indonesia does not open — refused in the app
+  (`crossBorder.ts`) and in the Firestore rules.
+
+## Tests
+
+```bash
+npm test                                                # unit tests, no network
+TESTNET=1 npx vitest run src/lib/rails.testnet.test.ts  # top-up, full guarded escrow and cash-out on real testnet
+```
+
+The guard tests run against real unsigned transactions captured from the Trustless Work
+testnet API (`src/lib/__fixtures__/tw-testnet.json`), not hand-built ones.
 
 ## Layout
 
@@ -91,7 +128,16 @@ scripts/
 
 ## Known limits
 
-- Testnet only; no mainnet USDC path yet.
+- Mainnet is wired but has not carried a real trade yet. Run one small deal end to end with
+  your own money before anyone else's.
+- The Trustless Work API key ships in the bundle, like every `VITE_` variable. It cannot move
+  funds — every transaction still needs the user's signature — but anyone can spend its rate
+  limit (50 requests a minute). Put it behind a proxy before real traffic.
+- Country is self-declared and fixed once set. It stops a party flipping it per deal, not a
+  party lying from the start; the licensed exchanges each side pays through hold the verified
+  identity.
+- A buyer or seller with a brand-new wallet needs a few XLM from an exchange before anything
+  else, to open the account. There is no sponsored account creation yet.
 - Auto-release on a missed deadline is shown as a date, not enforced on-chain.
 - Evidence is a link plus a note. Files are not yet stored on the contract.
 - The arbiter resolves from their own wallet; there is no arbiter console in the app.
