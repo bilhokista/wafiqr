@@ -1,166 +1,133 @@
-# Instaward request — wafiqr: make the shipment evidence checkable
+# Instaward request — wafiqr: from testnet to the first real trades
 
 **Builder:** Dian Bilhokista
 **Chapter:** Stellar Ambassador Chapter Indonesia
 **Project:** wafiqr — cross-border trade escrow on Stellar
-**Repository:** <https://github.com/bilhokista/wafiqr> · **Live:** <https://wafiqr.web.app>
+**Repository:** <https://github.com/bilhokista/wafiqr> · **Live (testnet):** <https://wafiqr.web.app>
 **Sprint:** 30 days
-**Network:** Testnet throughout
+**Network:** Testnet today; a capped mainnet pilot is the sprint's goal
 
 ---
 
 ## One paragraph
 
-wafiqr is a marketplace where a small Indonesian producer sells across a border
-for the first time and the payment waits in a Stellar escrow until the goods
-arrive. It runs end to end on testnet today. Its weakest link is not the money —
-that part works — it is the evidence: the seller typed a tracking number as free
-text, nobody checked it, and the escrow carried it as proof. This sprint makes
-the shipment evidence checkable by asking the courier, so a waybill that does
-not exist becomes visible to the buyer and the arbiter instead of sitting in the
-record looking like proof.
+wafiqr lets a small Indonesian producer sell to a buyer abroad with the payment
+held in a Stellar escrow until the goods arrive. Until this month it stopped at
+two walls: the buyer needed a crypto wallet and USDC to start, and the seller
+ended with USDC they could not spend. Both walls are now down on testnet,
+without wafiqr holding anyone's money, keys or currency. The buyer pays with
+what they already use — QRIS, a virtual account, a card — through a licensed
+ramp; the seller ends with rupiah in their own bank through a licensed exchange
+they already have. This sprint takes that from testnet to the first real trades.
 
 ## What already runs
 
-Verified on Stellar testnet on 2026-09-20:
+Verified on Stellar testnet on 2026-09-25, through the same code the live app uses:
 
-| Path | Contract | Result |
-|---|---|---|
-| Settled | `CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK` | seller +9.97 USDC |
-| Disputed | `CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV` | arbiter split: buyer 7, seller 3 |
-
-Escrow runs through Trustless Work single-release contracts in USDC. Trade terms
-— quantity, grade, Incoterm, ship-by date, named arbiter — are written into the
-contract and frozen at creation. A dispute goes to an arbiter both sides
-accepted before the money moved.
-
-Built ahead of this request and already in the repository:
-
-- `CourierProvider` — the interface a carrier plugs into
-- A DHL adapter against Shipment Tracking Unified
-- Refusal of a waybill the courier has never seen, at filing time. Dormant
-  until a carrier key is configured: with none, the number is recorded as typed
-  and marked unverified rather than silently passed as checked
-- The courier's reading written on chain beside the seller's note, and filed as
-  its own evidence entry under a `courier` badge
-- `recheckShipment` in the library, which deliberately does not move the deal
-  status — not yet reachable from the deal room, which is deliverable 3 below
-
-## The problem, concretely
-
-An escrow between strangers releases when one party asserts the other
-performed. Today that assertion is a string:
-
-```
-Tracking number:  DHL 1234567890
-```
-
-Nothing checks it exists. A seller can type anything, and the buyer — who is
-abroad, has never met them, and is deciding whether to confirm delivery — has
-no way to tell a real waybill from an invented one.
-
-The escrow holds the money correctly and holds the claims about the goods on
-faith. For a product whose entire offer is trust, that is the wrong way round.
-
-## What checking buys
-
-| Today | After |
+| Step | Evidence |
 |---|---|
-| "Shipped" because the seller says so | the waybill exists and the courier says so |
-| Arbiter reads two accounts | arbiter reads one fact neither party wrote |
-| An invented number looks like proof | an invented number is refused at filing |
+| Escrow deployed, code checked on chain, funded, shipped, approved, released | [`CAOIMIUW…PAGHB`](https://stellar.expert/explorer/testnet/contract/CAOIMIUWYBDHRALGE3HY47QN2PM4ABOQS4K3NJZGZKNBLYHFNUPPAGHB) — seller received 2.991 of 3 USDC after the Trustless Work fee |
+| Seller's USDC sent to an exchange deposit, converted to XLM, tagged with the memo | [tx `b04918f8…0c7a`](https://stellar.expert/explorer/testnet/tx/b04918f853b482c57a1c007a39df1e9fa6df564ec9b3a2970a5471acd2d50c7a) |
+| Earlier: settled path, disputed path with a 7/3 arbiter split | [`CACDT5HM…2HNK`](https://stellar.expert/explorer/testnet/contract/CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK), [`CDR54QT3…JWWV`](https://stellar.expert/explorer/testnet/contract/CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV) |
 
-The distinction the deal room now draws — which lines are claims and which came
-from outside the deal — is the whole point.
+Built and tested in the repository:
+
+- **A wallet for people who have never had one.** Made in the browser, sealed
+  under the owner's passphrase (PBKDF2-SHA256, AES-GCM) before it is stored.
+  wafiqr keeps a box it has no key to. Freighter still works.
+- **Money in.** The buyer buys XLM or USDC at a licensed ramp or exchange — Alchemy
+  Pay takes QRIS and virtual accounts in Indonesia, cards elsewhere — and
+  withdraws to their wallet. The deal room sees the deposit arrive, adds the USDC
+  trustline and swaps on the Stellar DEX with a 1% slippage floor.
+- **Money out.** After release the seller sends the USDC to their own exchange
+  account — Indodax, Tokocrypto — converted to XLM in one path payment carrying the
+  exchange's memo. They sell and withdraw to their bank there, as that exchange's
+  customer.
+- **Nothing signed blind.** Every escrow transaction arrives from the Trustless
+  Work API unsigned. wafiqr decodes it and refuses to sign unless signer,
+  contract, function, amount, receiver, arbiter, token and fee match the deal.
+  Before funding, it asks Soroban RPC — not the API — which code the escrow runs,
+  and funds only the Trustless Work build it has checked.
+- **Only across a border.** Law 4/2026 bars a stablecoin as a means of payment
+  inside Indonesia. A deal between two parties in Indonesia does not open,
+  refused in the app and in the database rules.
+- 66 unit tests, plus two end-to-end runs against live testnet.
+
+## Why this shape
+
+Every licence in this flow stays with the party that holds it. The ramp is
+licensed to sell the buyer USDC. The exchange is licensed to buy the seller's
+XLM and pay rupiah to their bank. The escrow is a Trustless Work contract
+that releases only on the buyer's approval, or on the ruling of an arbiter both
+sides accept before any money moves. During the pilot that arbiter is me, and
+the contract names the account, so both sides know who rules before they commit.
+wafiqr is the software between them. It is built never to take custody, which is
+what should keep it outside those licences — a reading to confirm with a
+fintech lawyer before the mainnet pilot, not one to assume. And it works in a country with no Stellar anchor for its
+currency — of the anchors in the ecosystem directory, none serves Indonesia.
 
 ## Sprint deliverables
 
-1. **A live DHL adapter** on the free Shipment Tracking Unified tier, moved
-   behind a server-side proxy so the key does not ship in the bundle.
-2. **A second carrier** through KiriminAja, which fronts JNE, J&T and SiCepat,
-   so a domestic leg is checkable too.
-3. **Re-check from the deal room** for buyer and arbiter, with every reading
-   written into the evidence trail under its own badge.
-4. **One full testnet run with a real waybill**: filed, checked, disputed, and
-   resolved by an arbiter reading a courier line neither party wrote.
+1. **Keys behind a server.** A small proxy for the Trustless Work and DHL API
+   keys, which today ship in the page bundle. They cannot move funds, but anyone
+   can spend their rate limit. This is the one thing that must precede mainnet.
+2. **A capped mainnet pilot.** A fintech lawyer reads the custody model first.
+   Then mainnet is switched on with a per-deal ceiling, a named arbiter account,
+   and the same guard and code check as testnet.
+3. **Five real cross-border trades.** Indonesian artisan goods — specialty
+   coffee from Bogor, Sabshal essential oil — to buyers in Singapore, reached
+   through Indonesians living there. Each paid in through a licensed ramp and paid
+   out to rupiah through the seller's own exchange account.
+4. **Courier evidence on those shipments.** The DHL check, already built and
+   dormant until keyed, run live on every pilot waybill.
+5. **A public cost-and-time report.** For each trade: what the buyer paid, what
+   reached the seller's bank, every fee on the way, and how long each leg took.
 
 ## Out of scope, deliberately
 
-- **Releasing money on a delivery scan.** A courier saying "delivered" means a
-  parcel reached an address, not that the oil matches the sample. Automating
-  release on a scan would hand every seller a way to be paid for shipping a
-  brick. The buyer still confirms.
-- Mainnet.
-- Customs filing. The record supports the exporter's filing; it does not
-  replace it.
-- The rupiah payout, which is the follow-on below rather than this sprint.
+- Holding funds, keys or currency, at any size. The design depends on it.
+- Domestic trades inside Indonesia.
+- Releasing money on a delivery scan. A courier saying "delivered" means a parcel
+  reached an address, not that the goods match the sample. The buyer confirms.
+- Sponsored account creation. A new wallet still needs a few XLM from an exchange
+  to open; paying that reserve on users' behalf is the next step, not this one.
 
 ## Success criteria
 
-Evaluated at the end of the sprint:
+- **Passes** if at least three of the five trades go from a buyer's local payment
+  method to rupiah in the seller's bank on mainnet, and the report is published
+  with real figures, including the ones that look bad.
+- **Fails** if no trade completes end to end, or if completing one requires
+  wafiqr to hold money or keys at any point.
 
-- **Passes** if a real waybill from one live carrier is filed, checked and
-  recorded; an invented number is refused with the courier named; and an
-  arbiter resolves a dispute reading a courier line neither party wrote.
-- **Fails** if no carrier can be reached, or if a check cannot distinguish a
-  waybill that does not exist from one that is merely early.
+The second failure matters more. A trade pushed through by stepping into custody
+would prove the opposite of what this is for.
 
-The second failure matters more than the first. A check that cannot tell those
-apart is worse than no check, because it would refuse honest sellers whose
-parcel has not been collected yet — and being wrongly refused once is enough for
-a first-time seller to stop.
+## What is assumed, stated rather than hidden
 
-## Follow-on: the rupiah payout
-
-Proposed as the next disbursement rather than this sprint, because it is blocked
-on an answer nobody here has yet.
-
-When the escrow releases, the seller holds USDC in a Stellar account. A producer
-in a village cannot spend that, show it to a bank, or report it as export
-proceeds. The interface, types, repatriation check, security rules, deal-room
-panel and end-to-end assertions are built and in the repository. What is missing
-is one licensed provider that routes IDR to the Stellar network.
-
-Of 43 Stellar anchors in the ecosystem directory, none serves Indonesia. Under
-Law No. 4/2026 the minimum registered capital for a digital asset exchange
-licence is Rp 500 billion, so wafiqr never takes custody — a licensed provider
-does, for the length of the conversion, and wafiqr records what came back.
-
-Alchemy Pay is listed in the Stellar Anchor Directory for XLM and USDC, and is
-one of fifteen providers listed for Indonesia alongside GoPay, OVO, ShopeePay
-and QRIS. Whether IDR actually settles on Stellar through any of them is the
-open question, and it is one sitting with a widget, not a sprint.
-
-Indonesian exporters of natural resources must repatriate proceeds to a
-state-owned bank account (PP 21/2026, PBI No. 5/2026), so any payout path here
-ends onshore. Whether a parcel-scale exporter sits above that threshold is the
-second thing to settle, and a customs broker answers it in one call.
-
-## What is assumed here, stated rather than hidden
-
-The customer is read as a parcel-scale exporter — five litres in two tins,
-shipped by DHL or Lion Parcel — rather than a container exporter. That reading
-comes from which shipping services Indonesian sellers are actually sold, which
-is desk research and buys nothing on its own. Nobody has asked an exporter what
-they ship, or what went wrong last time.
-
-It matters because it sets which carriers to reach for first, and because the
-repatriation threshold probably does not bind a parcel shipment. Both are
-first-week questions, not last-week ones.
+- **The first sellers are close to home.** The first goods are my own products
+  and [TO CONFIRM: the Bogor roaster supplying the coffee]. That is a pilot
+  seeding its own supply, not traction, and the report will say so.
+- **The buyers are not recruited yet.** Indonesians in Singapore are the channel I
+  expect to reach buyers through; nobody has been signed up. Week one is finding
+  the five.
+- **Country is self-declared.** It is fixed once set, which stops a party flipping
+  it per deal, not a party lying from the start. The ramp and the exchange each
+  side pays through hold the verified identity.
+- **Shipping essential oil by air is restricted** by many couriers as a flammable
+  liquid. If it cannot go by parcel, the oil trades are replaced with coffee.
 
 ## What the ecosystem gets
 
-A pattern any Stellar escrow can copy: independent evidence, from a party with
-no stake in the deal, written into the contract's own record.
-
-Escrows on every chain release on one party asserting the other performed.
-Making that assertion checkable is not specific to wafiqr, to Indonesia, or to
-trade — it is what makes an escrow between strangers worth more than a promise.
+A pattern any Stellar app can copy in a market without an anchor: licensed
+parties at both ends, a non-custodial wallet in the middle, and an app that
+signs nothing it has not read. Indonesia is the first market it was built for.
+It is not the only market with no Stellar anchor.
 
 ---
 
 *References: [Instaward rules](https://stellar.gitbook.io/scf-handbook/scf-awards/instawards/official-rules) ·
-[DHL Shipment Tracking Unified](https://developer.dhl.com/tracking) ·
-[KiriminAja Open API](https://developer.kiriminaja.com/) ·
-[PP 21/2026 on DHE SDA](https://siplawfirm.id/resources/dhe-sda-2026-pp-21-2026-aturan-eksportir) ·
-[PBI No. 5/2026](https://www.bi.go.id/id/publikasi/peraturan/Pages/PBI_052026.aspx)*
+[Law 4/2026, P2SK amendment (ABNR summary)](https://www.abnrlaw.com/news/indonesias-p2sk-law-amendment-what-law-42026-changes-for-crypto-and-digital-financial-assets) ·
+[Alchemy Pay on Stellar](https://alchemypay.org/news-and-press/alchemy-pay-joins-stellar-ecosystem-to-offer-ramp-service-for-developers-and-dapps) ·
+[Trustless Work API](https://docs.trustlesswork.com/trustless-work/api-rest/introduction) ·
+[DHL Shipment Tracking Unified](https://developer.dhl.com/tracking)*
