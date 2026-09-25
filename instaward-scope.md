@@ -106,7 +106,7 @@ would prove the opposite of what this is for.
 ## What is assumed, stated rather than hidden
 
 - **The first sellers are close to home.** The first goods are my own products
-  and [TO CONFIRM: the Bogor roaster supplying the coffee]. That is a pilot
+  and coffee from Bogor Punya Kopi, a Bogor roaster I work with. That is a pilot
   seeding its own supply, not traction, and the report will say so.
 - **The buyers are not recruited yet.** Indonesians in Singapore are the channel I
   expect to reach buyers through; nobody has been signed up. Week one is finding
