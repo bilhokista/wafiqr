@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { connectWallet } from './lib/wallet';
 import { addUsdcTrustline, buyUsdcWithXlm } from './lib/trustline';
+import { NETWORK } from './lib/network';
 import {
   deploySingleRelease,
   fundEscrow,
@@ -12,7 +13,7 @@ import {
   disputeEscrow,
   markShipped,
   getEscrow,
-  USDC_TESTNET_ISSUER,
+  USDC_ISSUER,
   type DeployBody,
   type EscrowState,
 } from './lib/trustlessWork';
@@ -96,7 +97,7 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
           receiver: buyer,
         },
         milestones: [{ description: 'Goods delivered and received' }],
-        trustline: { address: USDC_TESTNET_ISSUER, symbol: 'USDC' },
+        trustline: { address: USDC_ISSUER, symbol: 'USDC' },
       };
       const res = await deploySingleRelease(body);
       setContractId(res.contractId ?? res.escrow?.contractId ?? '');
@@ -105,7 +106,14 @@ export function WafiqrEscrow({ deal }: { deal: DealConfig }) {
 
   const fund = () =>
     act('Fund escrow', async () => {
-      await fundEscrow({ contractId, signer: buyer, amount: deal.amount });
+      // The widget's single wallet plays buyer and seller, so the escrow is
+      // held to exactly that: every role but the arbiter is this account.
+      await fundEscrow({
+        contractId,
+        signer: buyer,
+        amount: deal.amount,
+        parties: { buyer, seller: buyer, arbiter: deal.arbiter, usdcContract: NETWORK.usdcContract },
+      });
       setStage('funded');
     });
 

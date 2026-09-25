@@ -4,15 +4,17 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { saveUserProfile } from '../lib/db';
 import { addUsdcTrustline } from '../lib/trustline';
-import { Action, Badge, Eyebrow, Field, Notice, Shell, Spinner, shortAddress } from '../ui/kit';
-import { ArrowUpRight, Wallet } from '../ui/icons';
+import { Action, Badge, Eyebrow, Field, Notice, Shell, Spinner } from '../ui/kit';
+import { ArrowUpRight } from '../ui/icons';
+import { WalletPanel } from '../ui/WalletPanel';
 
 export function Account() {
-  const { user, profile, loading, linkWallet, refreshProfile } = useAuth();
+  const { user, profile, loading, refreshProfile } = useAuth();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [country, setCountry] = useState('');
 
   if (loading) return <main className="mx-auto max-w-lg px-4 py-32"><Spinner /></main>;
 
@@ -55,25 +57,10 @@ export function Account() {
 
           <div className="mt-8 space-y-4">
             <Field label="Stellar wallet" hint="Escrow funds settle to this address. It is public by design — counterparties can verify it.">
-              <div className="flex items-center gap-3 rounded-2xl bg-paper-deep/60 px-4 py-3 font-mono text-[12px] ring-1 ring-ink/[0.06]">
-                <Wallet size={14} />
-                <span className="truncate">{profile.walletAddress ? shortAddress(profile.walletAddress) : 'not linked'}</span>
-              </div>
+              <WalletPanel />
             </Field>
 
-            <Action
-              variant="ghost"
-              full
-              disabled={!!busy}
-              onClick={() => act('Link wallet', async () => {
-                const address = await linkWallet();
-                setMessage(`Wallet ${shortAddress(address)} linked.`);
-              })}
-            >
-              {profile.walletAddress ? 'Link a different wallet' : 'Connect a Stellar wallet'}
-            </Action>
-
-            {profile.walletAddress && (
+            {profile.walletAddress && profile.walletKind !== 'embedded' && (
               <Action
                 variant="ghost"
                 full
@@ -94,11 +81,25 @@ export function Account() {
                 onChange={(e) => setDisplayName(e.target.value)}
               />
             </Field>
+            <Field
+              label="Country"
+              hint={profile.country
+                ? 'Set once and fixed, because wafiqr only settles trades that cross a border.'
+                : 'Where you buy from or ship from. You can set this once; wafiqr only settles trades that cross a border.'}
+            >
+              <input
+                className="field"
+                value={country || profile.country}
+                disabled={!!profile.country}
+                onChange={(e) => setCountry(e.target.value)}
+                placeholder="Singapore"
+              />
+            </Field>
             <Action
               full
-              disabled={!!busy || !displayName || displayName === profile.displayName}
+              disabled={!!busy || ((!displayName || displayName === profile.displayName) && (!country || country === profile.country))}
               onClick={() => act('Save profile', async () => {
-                await saveUserProfile({ ...profile, displayName });
+                await saveUserProfile({ ...profile, displayName: displayName || profile.displayName, country: country || profile.country });
                 await refreshProfile();
                 setMessage('Profile saved.');
               })}

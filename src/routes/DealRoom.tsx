@@ -14,11 +14,13 @@ import {
   syncFromChain,
   termsText,
 } from '../lib/escrow';
-import { addUsdcTrustline, buyUsdcWithXlm } from '../lib/trustline';
+import { findVault, isEmbeddedUnlocked, onWalletChange } from '../lib/embeddedWallet';
 import type { Deal, DealStatus } from '../lib/types';
 import { Action, Badge, Eyebrow, Field, Notice, Shell, Spinner, shortAddress, shortDate, usdc } from '../ui/kit';
 import { ArrowRight, Clock, Scale, Shield, Ship, Wallet } from '../ui/icons';
 import { PayoutPanel } from '../ui/PayoutPanel';
+import { TopUpPanel } from '../ui/TopUpPanel';
+import { UnlockWallet } from '../ui/WalletPanel';
 
 const STEPS: { key: DealStatus; label: string; who: string }[] = [
   { key: 'draft', label: 'Terms agreed', who: 'Both' },
@@ -40,6 +42,19 @@ export function DealRoom() {
   const [note, setNote] = useState('');
   const [link, setLink] = useState('');
   const [reason, setReason] = useState('');
+  const [fundsReady, setFundsReady] = useState(false);
+  const [, rerender] = useState(0);
+
+  // Lock state lives outside React; redraw when it changes so the "unlock"
+  // notice disappears the moment the wallet opens in another panel.
+  useEffect(() => onWalletChange(() => rerender((n) => n + 1)), []);
+
+  // After a reload nothing in this tab knows the wallet is a wafiqr one until
+  // its vault is read. Read it now, so signing asks for the passphrase rather
+  // than sending the transaction to a Freighter that does not hold the key.
+  useEffect(() => {
+    if (user && profile?.walletKind === 'embedded') findVault(user.uid).catch(() => undefined);
+  }, [user, profile?.walletKind]);
 
   useEffect(() => {
     const stop = watchDeal(
@@ -158,16 +173,20 @@ export function DealRoom() {
               <div className="mt-6 flex-1 space-y-3">
                 {isBuyer && deal.status === 'draft' && (
                   <>
-                    <Action variant="ghost" full disabled={!!busy} onClick={() => act('Add USDC trustline', () => addUsdcTrustline(deal.buyerWallet).then(() => undefined))}>
-                      Add USDC trustline (one time)
-                    </Action>
-                    <Action variant="ghost" full disabled={!!busy} onClick={() => act('Get USDC', () => buyUsdcWithXlm(deal.buyerWallet, deal.amount + 1).then(() => undefined))}>
-                      Swap XLM for {usdc(deal.amount + 1)}
-                    </Action>
-                    <Action full trailing={busy ? <Spinner /> : <ArrowRight size={13} />} disabled={!!busy} onClick={() => act('Create escrow', () => deployForDeal(deal).then(() => undefined))}>
+                    <TopUpPanel address={deal.buyerWallet} usdcNeeded={deal.amount} onReady={() => setFundsReady(true)} />
+                    <Action full trailing={busy ? <Spinner /> : <ArrowRight size={13} />} disabled={!!busy || !fundsReady} onClick={() => act('Create escrow', () => deployForDeal(deal).then(() => undefined))}>
                       Create the escrow
                     </Action>
                   </>
+                )}
+
+                {isSeller && ['draft', 'deployed', 'funded', 'shipped', 'approved'].includes(deal.status) && (
+                  <details className="rounded-2xl border border-ink/10 px-4 py-3">
+                    <summary className="cursor-pointer text-[13px] text-ink-soft">Is your wallet ready to be paid?</summary>
+                    <div className="mt-4">
+                      <TopUpPanel address={deal.sellerWallet} usdcNeeded={0} />
+                    </div>
+                  </details>
                 )}
 
                 {isBuyer && deal.status === 'deployed' && (
@@ -247,6 +266,8 @@ export function DealRoom() {
                 {profile && !profile.walletAddress && (
                   <Notice tone="error">Link a Stellar wallet on your account before signing anything.</Notice>
                 )}
+
+                {role !== 'watcher' && profile?.walletKind === 'embedded' && !isEmbeddedUnlocked(profile.walletAddress) && <UnlockWallet />}
               </div>
 
               {error && <div className="mt-5"><Notice tone="error">{error}</Notice></div>}

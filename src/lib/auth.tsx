@@ -35,6 +35,8 @@ interface AuthValue {
   signInWithGoogle: (role: 'buyer' | 'seller', country: string) => Promise<void>;
   signOut: () => Promise<void>;
   linkWallet: () => Promise<string>;
+  /** Points the profile at a wallet wafiqr made in this browser. */
+  adoptEmbeddedWallet: (address: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -124,9 +126,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // wallet, so it loads on demand instead of on first paint.
         const { connectWallet } = await import('./wallet');
         const walletAddress = await connectWallet();
-        await saveUserProfile({ ...(profile as UserProfile), uid: user.uid, walletAddress });
-        setProfile((prev) => (prev ? { ...prev, walletAddress } : prev));
+        await saveUserProfile({ ...(profile as UserProfile), uid: user.uid, walletAddress, walletKind: 'external' });
+        setProfile((prev) => (prev ? { ...prev, walletAddress, walletKind: 'external' } : prev));
         return walletAddress;
+      },
+      async adoptEmbeddedWallet(walletAddress) {
+        if (!user) throw new Error('Sign in before making a wallet');
+        await saveUserProfile({ ...(profile as UserProfile), uid: user.uid, walletAddress, walletKind: 'embedded' });
+        setProfile((prev) => (prev ? { ...prev, walletAddress, walletKind: 'embedded' } : prev));
       },
       async refreshProfile() {
         if (user) setProfile(await loadUserProfile(user.uid));

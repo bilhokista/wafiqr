@@ -92,8 +92,12 @@ export interface Deal {
  * `bank` runs the released USDC through a licensed off-ramp into an Indonesian
  * bank account. wafiqr never holds the funds — the licensed provider does, and
  * only for as long as the conversion takes.
+ *
+ * `exchange` sends the released USDC to the seller's own account at a licensed
+ * exchange, where the seller sells it and withdraws to their bank themselves.
+ * It needs no contract with anyone, which is why it works today.
  */
-export type PayoutRail = 'wallet' | 'bank';
+export type PayoutRail = 'wallet' | 'bank' | 'exchange';
 
 export type PayoutStatus =
   | 'none'
@@ -154,6 +158,45 @@ export interface UserProfile {
   displayName: string;
   role: 'buyer' | 'seller';
   walletAddress: string;
+  /** `embedded` is the wallet wafiqr creates in the browser; `external` is Freighter and friends. */
+  walletKind?: 'embedded' | 'external';
   country: string;
   createdAt: number;
+}
+
+/**
+ * Where a seller's own exchange account takes Stellar deposits.
+ *
+ * Exchanges credit a shared deposit address by memo. A payment that arrives
+ * without the right memo reaches the exchange and belongs to nobody, so the
+ * memo is part of the destination, not an optional note on it.
+ */
+export interface ExchangeDestination {
+  exchange: string; // "Indodax", "Tokocrypto"
+  address: string; // G… deposit address the exchange shows
+  memo: string;
+  memoType: 'text' | 'id';
+  /** What the exchange accepts on Stellar. Most take XLM; fewer take USDC. */
+  asset: 'XLM' | 'USDC';
+}
+
+/** A sealed embedded wallet as stored for recovery. See `vault.ts`. */
+export interface WalletVault {
+  uid: string;
+  publicKey: string;
+  sealed: import('./vault').SealedSecret;
+  createdAt: number;
+}
+
+/**
+ * What a user keeps on file that no counterparty should read.
+ *
+ * Separate from `UserProfile` because profiles are readable by any signed-in
+ * account, and an exchange deposit memo ties a person to their exchange
+ * account. The rules let only the owner read this one.
+ */
+export interface PrivateProfile {
+  uid: string;
+  exchangeDestination?: ExchangeDestination;
+  updatedAt: number;
 }

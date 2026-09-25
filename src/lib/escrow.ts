@@ -10,7 +10,7 @@ import {
   markShipped,
   releaseFunds,
   resolveDispute,
-  USDC_TESTNET_ISSUER,
+  USDC_ISSUER,
   type DeployBody,
   type EscrowState,
 } from './trustlessWork';
@@ -31,7 +31,10 @@ import {
   contradictsShipping,
   couriers,
 } from './courier';
-import type { Deal, DealStatus, PayoutRail, SettlementRecord } from './types';
+import { sendCashout } from './cashout';
+import { accountState } from './trustline';
+import { NETWORK } from './network';
+import type { Deal, DealStatus, ExchangeDestination, PayoutRail, SettlementRecord } from './types';
 
 /** The agreed terms, written into the escrow description so they are auditable. */
 export function termsText(deal: Deal): string {
@@ -63,7 +66,7 @@ export async function deployForDeal(deal: Deal): Promise<string> {
     milestones: [
       { description: `Goods shipped and received per ${deal.incoterm}, by ${new Date(deal.shipBy).toISOString().slice(0, 10)}` },
     ],
-    trustline: { address: USDC_TESTNET_ISSUER, symbol: 'USDC' },
+    trustline: { address: USDC_ISSUER, symbol: 'USDC' },
   };
   const res = await deploySingleRelease(body);
   const contractId = res.contractId ?? res.escrow?.contractId ?? '';
@@ -73,7 +76,17 @@ export async function deployForDeal(deal: Deal): Promise<string> {
 }
 
 export async function fundForDeal(deal: Deal) {
-  await fundEscrow({ contractId: deal.contractId, signer: deal.buyerWallet, amount: deal.amount });
+  await fundEscrow({
+    contractId: deal.contractId,
+    signer: deal.buyerWallet,
+    amount: deal.amount,
+    parties: {
+      buyer: deal.buyerWallet,
+      seller: deal.sellerWallet,
+      arbiter: deal.arbiterWallet,
+      usdcContract: NETWORK.usdcContract,
+    },
+  });
   await updateDealStatus(deal.id, 'funded');
 }
 
@@ -216,6 +229,87 @@ export async function recordSettlement(deal: Deal, settlement: SettlementRecord)
     byUid: deal.sellerUid,
     byRole: 'seller',
     at: settlement.settledAt,
+  });
+}
+
+/**
+ * Sends the released USDC to the seller's own exchange account.
+ *
+ * The seller signs; wafiqr only built the payment. What gets recorded is the
+ * transaction hash and where it went, so the seller, the buyer and anyone the
+ * seller later shows it to can follow the money to the exchange's door.
+ */
+/**
+ * What a cash-out can send. Trustless Work takes its fee at release, so the
+ * seller holds a little less than the deal amount. Send what is really there,
+ * capped at the payout's frozen figure, so USDC the seller holds from
+ * elsewhere stays put.
+ */
+export async function cashoutAmount(deal: Deal, frozen = deal.amount): Promise<number> {
+  const { usdc: held } = await accountState(deal.sellerWallet);
+  return Math.min(frozen, held);
+}
+
+/** Deals with a cash-out being built in this tab. Stops a double click from paying twice. */
+const cashoutsInFlight = new Set<string>();
+
+export async function cashoutForDeal(deal: Deal, dest: ExchangeDestination) {
+  if (cashoutsInFlight.has(deal.id)) throw new Error('This payout is already being sent.');
+  cashoutsInFlight.add(deal.id);
+  try {
+    return await cashoutOnce(deal, dest);
+  } finally {
+    cashoutsInFlight.delete(deal.id);
+  }
+}
+
+async function cashoutOnce(deal: Deal, dest: ExchangeDestination) {
+  let payout = await getPayout(deal.id);
+  // Once a payment has gone out, the record says so, and a second one must not
+  // follow it — from a reload, another tab, or another device.
+  if (payout?.status === 'submitted' || payout?.status === 'settled') {
+    throw new Error('This payout was already sent. Check your exchange for the deposit.');
+  }
+  if (!payout) {
+    payout = newPayout(deal, 'exchange', dest.exchange);
+    await savePayout(payout);
+  }
+  const amount = await cashoutAmount(deal, payout.usdcAmount);
+  if (amount <= 0) throw new Error('There is no USDC in your wallet to send. Has the escrow been released to it?');
+
+  try {
+    const { hash, minReceived } = await sendCashout(deal.sellerWallet, dest, amount);
+    await updatePayout(deal.id, { rail: 'exchange', status: 'submitted', provider: dest.exchange });
+    await appendEvidence(deal.id, {
+      kind: 'inspection',
+      note: `Sent ${amount} USDC to the seller's ${dest.exchange} account, arriving as at least ${minReceived.toFixed(2)} ${dest.asset}, tx ${hash}. Selling it and withdrawing to a bank happens at ${dest.exchange}.`,
+      byUid: deal.sellerUid,
+      byRole: 'seller',
+      at: Date.now(),
+    });
+    return hash;
+  } catch (error: unknown) {
+    const failure = error instanceof Error ? error.message : String(error);
+    await updatePayout(deal.id, { rail: 'exchange', status: 'failed', failure });
+    throw error;
+  }
+}
+
+/**
+ * The seller says the rupiah reached their bank. wafiqr cannot see a bank
+ * account and does not pretend to: this is recorded as the seller's statement,
+ * under the seller's name, and nothing else.
+ */
+export async function confirmBankArrival(deal: Deal, idrAmount?: number) {
+  await updatePayout(deal.id, { status: 'settled' });
+  await appendEvidence(deal.id, {
+    kind: 'inspection',
+    note: idrAmount
+      ? `Seller reports Rp ${idrAmount.toLocaleString('id-ID')} received in their bank.`
+      : 'Seller reports the proceeds reached their bank.',
+    byUid: deal.sellerUid,
+    byRole: 'seller',
+    at: Date.now(),
   });
 }
 

@@ -60,7 +60,10 @@ export function SignIn() {
               variant="ghost"
               disabled={busy}
               trailing={busy ? <Spinner /> : undefined}
-              onClick={() => run(() => signInWithGoogle(role, country || 'Indonesia'))}
+              // No default country. It is fixed once set and decides whether a
+              // trade may open, so guessing "Indonesia" for a buyer in Singapore
+              // would lock them out. Left blank, the account page asks.
+              onClick={() => run(() => signInWithGoogle(role, country.trim()))}
             >
               Continue with Google
             </Action>

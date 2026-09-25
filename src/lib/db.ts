@@ -16,12 +16,14 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Deal, DealStatus, Evidence, Listing, UserProfile, Payout, PayoutStatus } from './types';
+import type { Deal, DealStatus, Evidence, Listing, UserProfile, Payout, PayoutStatus, PrivateProfile, WalletVault } from './types';
 
 const LISTINGS = 'listings';
 const DEALS = 'deals';
 const USERS = 'users';
 const PAYOUTS = 'payouts';
+const VAULTS = 'vaults';
+const PRIVATE = 'private';
 
 // --- Users -----------------------------------------------------------------
 
@@ -139,4 +141,31 @@ export async function setPayoutStatus(dealId: string, status: PayoutStatus, fail
     updatedAt: Date.now(),
     ...(failure ? { failure } : {}),
   });
+}
+
+// --- Wallet vaults ---------------------------------------------------------
+
+/**
+ * The sealed copy of an embedded wallet, kept so the owner can recover it on a
+ * new phone. It is ciphertext under a passphrase wafiqr never receives, and the
+ * rules let only its owner read it.
+ */
+export async function saveVault(vault: WalletVault) {
+  await setDoc(doc(db, VAULTS, vault.uid), vault);
+}
+
+export async function loadVault(uid: string): Promise<WalletVault | null> {
+  const snap = await getDoc(doc(db, VAULTS, uid));
+  return snap.exists() ? (snap.data() as WalletVault) : null;
+}
+
+// --- Private profile -------------------------------------------------------
+
+export async function savePrivateProfile(profile: PrivateProfile) {
+  await setDoc(doc(db, PRIVATE, profile.uid), { ...profile, updatedAt: Date.now() }, { merge: true });
+}
+
+export async function loadPrivateProfile(uid: string): Promise<PrivateProfile | null> {
+  const snap = await getDoc(doc(db, PRIVATE, uid));
+  return snap.exists() ? (snap.data() as PrivateProfile) : null;
 }

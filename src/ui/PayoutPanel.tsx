@@ -22,6 +22,7 @@ import {
 import type { Deal, Payout } from '../lib/types';
 import { Action, Badge, Field, Notice, Spinner, usdc } from './kit';
 import { Wallet } from './icons';
+import { ExchangeCashout } from './ExchangeCashout';
 
 /** State banks, by the code the seller picks. Only these satisfy placement. */
 const BANKS: { code: string; name: string }[] = [
@@ -63,7 +64,7 @@ export function PayoutPanel({
     );
   }
 
-  const settled = payout?.status === 'settled' && payout.settlement;
+  const settled = payout?.status === 'settled';
 
   // The buyer paid and is entitled to know whether the money arrived. They are
   // not entitled to the seller's bank details, and the record does not hold the
@@ -72,8 +73,10 @@ export function PayoutPanel({
     return (
       <div className="rounded-2xl bg-sage/10 px-4 py-4 text-[13px] text-sage-deep">
         {settled
-          ? `The seller has been paid out to a bank account. ${payout!.settlement!.himbara ? 'State bank.' : ''}`
-          : 'Released to the seller’s Stellar account. Converting to their local currency is the seller’s next step, and it is not finished yet.'}
+          ? `The seller reports the proceeds reached their bank. ${payout!.settlement?.himbara ? 'State bank.' : ''}`
+          : payout?.status === 'submitted'
+            ? `Released, and sent on to the seller’s ${payout.provider || 'exchange'} account. Withdrawing to their bank is the seller’s last step.`
+            : 'Released to the seller’s Stellar account. Converting to their local currency is the seller’s next step, and it is not finished yet.'}
       </div>
     );
   }
@@ -85,7 +88,7 @@ export function PayoutPanel({
           <Wallet size={18} />
           <span className="text-[13px]">Rupiah received. This trade is finished.</span>
         </div>
-        <p className="text-[12px] text-ink-mute">{settlementText(payout!.settlement!)}</p>
+        {payout!.settlement && <p className="text-[12px] text-ink-mute">{settlementText(payout!.settlement)}</p>}
       </div>
     );
   }
@@ -110,6 +113,12 @@ export function PayoutPanel({
   }
 
   return (
+    <div className="space-y-6">
+      <ExchangeCashout deal={deal} payout={payout} onChange={() => getPayout(deal.id).then(setPayout)} />
+
+      <details className="rounded-2xl border border-ink/10 px-4 py-3">
+        <summary className="cursor-pointer text-[13px] text-ink-soft">Straight to a bank account instead</summary>
+        <div className="mt-4">
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[13px] text-ink-mute">
@@ -207,6 +216,9 @@ export function PayoutPanel({
       )}
 
       {error && <Notice tone="error">{error}</Notice>}
+    </div>
+        </div>
+      </details>
     </div>
   );
 }

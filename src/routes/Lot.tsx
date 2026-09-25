@@ -2,7 +2,8 @@
 // Nothing here moves money: it settles the terms both sides will be held to.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createDeal, getListing } from '../lib/db';
+import { createDeal, getListing, loadUserProfile } from '../lib/db';
+import { crossBorderProblem } from '../lib/crossBorder';
 import { seedById } from '../lib/seed';
 import { useAuth } from '../lib/auth';
 import { ARBITER_WALLET } from '../lib/config';
@@ -72,6 +73,14 @@ export function Lot() {
     setBusy(true);
     setError('');
     try {
+      // Checked against the seller's own profile, not the lot, because the
+      // lot's village line is free text and the profile is what they signed up with.
+      const seller = await loadUserProfile(listing.sellerUid);
+      const problem = crossBorderProblem(profile.country, seller?.country);
+      if (problem) {
+        setError(problem);
+        return;
+      }
       const dealId = await createDeal({
         listingId: listing.id,
         listingTitle: listing.title,

@@ -15,10 +15,22 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
+      function validProfile() {
+        return request.resource.data.uid == uid
+          && request.resource.data.role in ['buyer', 'seller']
+          && request.resource.data.get('country', '') is string
+          && request.resource.data.get('country', '').size() <= 60;
+      }
+
       allow read: if signedIn();
-      allow create, update: if isSelf(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.role in ['buyer', 'seller'];
+      allow create: if isSelf(uid) && validProfile();
+      // Country is what the cross-border rule on deals reads, so once set it
+      // stays set: flipping it per deal would make that rule decorative. It is
+      // still self-declared — the licensed exchanges each party pays through
+      // hold the verified identity; this stops the cheap lie, not every lie.
+      allow update: if isSelf(uid) && validProfile()
+        && (resource.data.get('country', '') == ''
+          || request.resource.data.get('country', '') == resource.data.get('country', ''));
       allow delete: if false;
     }
 
@@ -53,8 +65,28 @@ service cloud.firestore {
       // Deals are private: only the buyer and the seller who opened them may read.
       allow read: if isParty();
 
+      function countryOf(uid) {
+        return get(/databases/$(database)/documents/users/$(uid)).data.get('country', '').lower().trim();
+      }
+
+      function isIndonesia(country) {
+        return country in ['indonesia', 'id', 'idn', 'ri', 'republik indonesia', 'republic of indonesia'];
+      }
+
+      // Settling in USDC is lawful for wafiqr only across a border: Law 4/2026
+      // forbids a stablecoin as payment inside Indonesia. The app says this in
+      // words (src/lib/crossBorder.ts); the rule makes it true for anyone who
+      // skips the app.
+      function crossesBorder(buyerUid, sellerUid) {
+        let buyer = countryOf(buyerUid);
+        let seller = countryOf(sellerUid);
+        return buyer != '' && seller != '' && buyer != seller
+          && !(isIndonesia(buyer) && isIndonesia(seller));
+      }
+
       // The buyer opens the deal, and the money figure must match the line items.
       allow create: if isSelf(request.resource.data.buyerUid)
+        && crossesBorder(request.resource.data.buyerUid, request.resource.data.sellerUid)
         && request.resource.data.status == 'draft'
         && request.resource.data.contractId == ''
         && request.resource.data.evidence.size() == 0
@@ -112,15 +144,42 @@ service cloud.firestore {
         && request.resource.data.usdcAmount is number
         && request.resource.data.usdcAmount > 0
         && request.resource.data.usdcAmount <= deal().amount
-        && request.resource.data.rail in ['wallet', 'bank'];
+        && request.resource.data.rail in ['wallet', 'bank', 'exchange'];
 
       // The figure is frozen once the payout exists. Status, quote, settlement
       // and failure text may move; the amount may not.
       allow update: if isSeller()
         && request.resource.data.dealId == resource.data.dealId
-        && request.resource.data.usdcAmount == resource.data.usdcAmount;
+        && request.resource.data.usdcAmount == resource.data.usdcAmount
+        && request.resource.data.rail in ['wallet', 'bank', 'exchange'];
 
       allow delete: if false;
+    }
+
+    // A sealed embedded wallet. Ciphertext under a passphrase wafiqr never
+    // sees, readable by its owner only, so they can recover on a new device.
+    // Overwrite is allowed because restoring from a written-down secret
+    // re-seals it under a new passphrase; the public key may not change,
+    // because a vault that silently swaps keys would strand escrows.
+    match /vaults/{uid} {
+      allow read: if isSelf(uid);
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.publicKey is string
+        && request.resource.data.sealed.ciphertext is string;
+      allow update: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.publicKey == resource.data.publicKey
+        && request.resource.data.sealed.ciphertext is string;
+      allow delete: if false;
+    }
+
+    // What only the owner should read: the exchange deposit memo ties a person
+    // to their exchange account.
+    match /private/{uid} {
+      allow read: if isSelf(uid);
+      allow create, update: if isSelf(uid) && request.resource.data.uid == uid;
+      allow delete: if isSelf(uid);
     }
   }
 }
