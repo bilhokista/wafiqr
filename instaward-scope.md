@@ -1,133 +1,117 @@
-# Instaward request — wafiqr: from testnet to the first real trades
+# Instaward request — wafiqr: the deal's rules on chain, the keys on the device
 
-**Builder:** Dian Bilhokista
+**Team:** Dian Bilhokista (engineering, the only role funded) · Inneke Mitha K (product, not funded)
 **Chapter:** Stellar Ambassador Chapter Indonesia
 **Project:** wafiqr — cross-border trade escrow on Stellar
 **Repository:** <https://github.com/bilhokista/wafiqr> · **Live (testnet):** <https://wafiqr.web.app>
 **Sprint:** 30 days
-**Network:** Testnet today; a capped mainnet pilot is the sprint's goal
+**Network:** Testnet for the whole sprint. Nothing here touches mainnet.
+**Revised:** 2026-10-11, against the Instawards "Never do these" rules. Supersedes the 2026-09-25 version.
 
 ---
 
 ## One paragraph
 
 wafiqr lets a small Indonesian producer sell to a buyer abroad with the payment
-held in a Stellar escrow until the goods arrive. Until this month it stopped at
-two walls: the buyer needed a crypto wallet and USDC to start, and the seller
-ended with USDC they could not spend. Both walls are now down on testnet,
-without wafiqr holding anyone's money, keys or currency. The buyer pays with
-what they already use — QRIS, a virtual account, a card — through a licensed
-ramp; the seller ends with rupiah in their own bank through a licensed exchange
-they already have. This sprint takes that from testnet to the first real trades.
+held in a Trustless Work escrow until the goods arrive. It runs on testnet today.
+Two weaknesses remain. The guard that stops a user signing the wrong escrow call
+is JavaScript, so a compromised page can skip it. And the first-time browser
+wallet keeps an encrypted recovery copy of its secret in Firestore. This sprint
+moves the guard onto the chain as a smart-account policy, gives users passkey
+wallets, and takes every key and every piece of personal data out of the database.
 
-## What already runs
-
-Verified on Stellar testnet on 2026-09-25, through the same code the live app uses:
+## What already runs (built before the sprint, not billed)
 
 | Step | Evidence |
 |---|---|
-| Escrow deployed, code checked on chain, funded, shipped, approved, released | [`CAOIMIUW…PAGHB`](https://stellar.expert/explorer/testnet/contract/CAOIMIUWYBDHRALGE3HY47QN2PM4ABOQS4K3NJZGZKNBLYHFNUPPAGHB) — seller received 2.991 of 3 USDC after the Trustless Work fee |
+| Escrow deployed, code checked on chain, funded, shipped, approved, released | [`CAOIMIUW…PAGHB`](https://stellar.expert/explorer/testnet/contract/CAOIMIUWYBDHRALGE3HY47QN2PM4ABOQS4K3NJZGZKNBLYHFNUPPAGHB) |
 | Seller's USDC sent to an exchange deposit, converted to XLM, tagged with the memo | [tx `b04918f8…0c7a`](https://stellar.expert/explorer/testnet/tx/b04918f853b482c57a1c007a39df1e9fa6df564ec9b3a2970a5471acd2d50c7a) |
-| Earlier: settled path, disputed path with a 7/3 arbiter split | [`CACDT5HM…2HNK`](https://stellar.expert/explorer/testnet/contract/CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK), [`CDR54QT3…JWWV`](https://stellar.expert/explorer/testnet/contract/CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV) |
+| Settled path, and a disputed path with a 7/3 arbiter split | [`CACDT5HM…2HNK`](https://stellar.expert/explorer/testnet/contract/CACDT5HM4SP3HNU6TXDJ3GHWMBDV5QU4HZ4NK5XA75MFH6CP3LHS2HNK), [`CDR54QT3…JWWV`](https://stellar.expert/explorer/testnet/contract/CDR54QT3GJLSJDI2SGT2BFVY4PQGJ6WYCJOD3HZOQ2XS3ARGWSCDJWWV) |
 
-Built and tested in the repository:
-
-- **A wallet for people who have never had one.** Made in the browser, sealed
-  under the owner's passphrase (PBKDF2-SHA256, AES-GCM) before it is stored.
-  wafiqr keeps a box it has no key to. Freighter still works.
-- **Money in.** The buyer buys XLM or USDC at a licensed ramp or exchange — Alchemy
-  Pay takes QRIS and virtual accounts in Indonesia, cards elsewhere — and
-  withdraws to their wallet. The deal room sees the deposit arrive, adds the USDC
-  trustline and swaps on the Stellar DEX with a 1% slippage floor.
-- **Money out.** After release the seller sends the USDC to their own exchange
-  account — Indodax, Tokocrypto — converted to XLM in one path payment carrying the
-  exchange's memo. They sell and withdraw to their bank there, as that exchange's
-  customer.
-- **Nothing signed blind.** Every escrow transaction arrives from the Trustless
-  Work API unsigned. wafiqr decodes it and refuses to sign unless signer,
-  contract, function, amount, receiver, arbiter, token and fee match the deal.
-  Before funding, it asks Soroban RPC — not the API — which code the escrow runs,
-  and funds only the Trustless Work build it has checked.
-- **Only across a border.** Law 4/2026 bars a stablecoin as a means of payment
-  inside Indonesia. A deal between two parties in Indonesia does not open,
-  refused in the app and in the database rules.
-- 66 unit tests, plus two end-to-end runs against live testnet.
-
-## Why this shape
-
-Every licence in this flow stays with the party that holds it. The ramp is
-licensed to sell the buyer USDC. The exchange is licensed to buy the seller's
-XLM and pay rupiah to their bank. The escrow is a Trustless Work contract
-that releases only on the buyer's approval, or on the ruling of an arbiter both
-sides accept before any money moves. During the pilot that arbiter is me, and
-the contract names the account, so both sides know who rules before they commit.
-wafiqr is the software between them. It is built never to take custody, which is
-what should keep it outside those licences — a reading to confirm with a
-fintech lawyer before the mainnet pilot, not one to assume. And it works in a country with no Stellar anchor for its
-currency — of the anchors in the ecosystem directory, none serves Indonesia.
+Plus the client-side transaction guard (`txGuard.ts`), the Soroban RPC check of the
+escrow WASM (`escrowCode.ts`), DEX top-up and exchange cash-out, the cross-border-only
+rule, 66 unit tests and two end-to-end testnet runs.
 
 ## Sprint deliverables
 
-1. **Keys behind a server.** A small proxy for the Trustless Work and DHL API
-   keys, which today ship in the page bundle. They cannot move funds, but anyone
-   can spend their rate limit. This is the one thing that must precede mainnet.
-2. **A capped mainnet pilot.** A fintech lawyer reads the custody model first.
-   Then mainnet is switched on with a per-deal ceiling, a named arbiter account,
-   and the same guard and code check as testnet.
-3. **Five real cross-border trades.** Indonesian artisan goods — specialty
-   coffee from Bogor, Sabshal essential oil — to buyers in Singapore, reached
-   through Indonesians living there. Each paid in through a licensed ramp and paid
-   out to rupiah through the seller's own exchange account.
-4. **Courier evidence on those shipments.** The DHL check, already built and
-   dormant until keyed, run live on every pilot waybill.
-5. **A public cost-and-time report.** For each trade: what the buyer paid, what
-   reached the seller's bank, every fee on the way, and how long each leg took.
+1. **Deal policy contract (Soroban, Rust).** An open-source policy for OpenZeppelin
+   `stellar-contracts` smart accounts. In a deal's context rule it allows only
+   `fund_escrow` on that deal's Trustless Work escrow, up to the agreed price, and
+   `approve_milestone`, `release_funds`, `change_milestone_status` and
+   `dispute_escrow` on the same contract. Everything else is rejected on chain.
+   Unit and fuzz tests, deployed to testnet.
+2. **Passkey deal accounts.** Smart Account Kit wallets hold the escrow roles. The app
+   installs the policy, then calls the escrow contract directly through Soroban RPC with
+   smart-account auth entries. Fees go through the OpenZeppelin Relayer's hosted testnet
+   instance, which fee-bumps only. Freighter and Stellar Wallets Kit keep working.
+3. **No keys and no personal data in the database.** The Firestore copy of the sealed
+   wallet secret is deleted and users move to device-only storage with a backup file they
+   keep. Names, email and bank details leave deal and settlement documents; shipping
+   details are encrypted on the client to the counterparty. Firestore rules refuse those
+   fields.
+4. **End-to-end runs and the trust model.** Three scripted testnet runs with passkey
+   accounts: settled, disputed and resolved, and a funding attempt above the price that
+   the policy refuses. Published with every contract ID and transaction hash.
 
-## Out of scope, deliberately
+## Budget
 
-- Holding funds, keys or currency, at any size. The design depends on it.
-- Domestic trades inside Indonesia.
-- Releasing money on a delivery scan. A courier saying "delivered" means a parcel
-  reached an address, not that the goods match the sample. The buyer confirms.
-- Sponsored account creation. A new wallet still needs a few XLM from an exchange
-  to open; paying that reserve on users' behalf is the next step, not this one.
+USD 5,000, paid in XLM to a Stellar address. Engineering time only, USD 40 an hour.
 
-## Success criteria
+| Deliverable | Hours | USD |
+|---|---|---|
+| 1. Deal policy contract | 45 | 1,800 |
+| 2. Passkey deal accounts | 45 | 1,800 |
+| 3. No keys and no PII in the database | 25 | 1,000 |
+| 4. End-to-end runs and trust model | 10 | 400 |
+| **Total** | **125** | **5,000** |
 
-- **Passes** if at least three of the five trades go from a buyer's local payment
-  method to rupiah in the seller's bank on mainnet, and the report is published
-  with real figures, including the ones that look bad.
-- **Fails** if no trade completes end to end, or if completing one requires
-  wafiqr to hold money or keys at any point.
+## Trust, threat, key-management and recovery model
 
-The second failure matters more. A trade pushed through by stepping into custody
-would prove the opposite of what this is for.
+- **Keys.** Only users hold them: a passkey in the device authenticator, or a classic
+  wallet secret on the device with a user-kept backup. wafiqr runs no signing service and
+  holds no master, deployer or HMAC key.
+- **Funds.** Only the Trustless Work escrow moves them, on the buyer's approval or the
+  named arbiter's ruling. wafiqr cannot release, redirect or freeze anything.
+- **Arbiter.** An address named in each escrow before funding, accepted by both parties.
+  No default arbiter, no admin key over escrows.
+- **Fees.** The relayer fee-bumps what the user already authorised and cannot change it.
+  If it is down, the user pays the fee in XLM and the deal continues.
+- **Threats.** A compromised page funding the wrong contract or a larger amount is
+  refused on chain. A database breach exposes no keys and no personal data.
+- **Recovery.** A synced passkey plus an optional second passkey as backup signer; for a
+  classic wallet, the user's own backup file. wafiqr cannot recover an account for anyone.
+- **Limits.** Country is self-declared; the licensed ramp and exchange hold the verified
+  identity. Trustless Work's contract was last audited in September 2025, one more reason
+  the sprint stays on testnet.
 
-## What is assumed, stated rather than hidden
+## Out of scope
 
-- **The first sellers are close to home.** The first goods are my own products
-  and coffee from Bogor Punya Kopi, a Bogor coffee shop that roasts its own beans. That is a pilot
-  seeding its own supply, not traction, and the report will say so.
-- **The buyers are not recruited yet.** Indonesians in Singapore are the channel I
-  expect to reach buyers through; nobody has been signed up. Week one is finding
-  the five.
-- **Country is self-declared.** It is fixed once set, which stops a party flipping
-  it per deal, not a party lying from the start. The ramp and the exchange each
-  side pays through hold the verified identity.
-- **Shipping essential oil by air is restricted** by many couriers as a flammable
-  liquid. If it cannot go by parcel, the oil trades are replaced with coffee.
+Mainnet and real-money trades (they wait for an independent audit of the policy contract,
+not paid from this award). Writing or changing an escrow contract. Hosting, domains, API
+keys, AI tools or other running costs. Marketing, buyer recruitment, pilot incentives.
+Legal opinions. Any role other than engineering in the budget.
 
-## What the ecosystem gets
+## Prior art
 
-A pattern any Stellar app can copy in a market without an anchor: licensed
-parties at both ends, a non-custodial wallet in the middle, and an app that
-signs nothing it has not read. Indonesia is the first market it was built for.
-It is not the only market with no Stellar anchor.
+Trustless Work (SCF #31) provides the escrow; wafiqr writes none. Kutana (SCF #45 Build)
+runs trade escrow for African SMEs on Trustless Work and, per its own submission, signs
+for users through a service that holds the role keys. wafiqr does the opposite: a wallet
+the user controls, an on-chain policy on what it may sign, and a corridor (Indonesia, no
+Stellar anchor for the rupiah) no funded project serves.
+
+## Next phases
+
+2. Independent audit of the policy contract, funded outside the Instaward; then a capped
+   mainnet launch.
+3. Rupiah pay-out through a licensed issuer on Stellar, replacing the exchange hop.
+
+The business model is a 1% platform fee set in the escrow's own platform-fee field and
+paid on release, never on a refund. It stays at zero until mainnet.
 
 ---
 
 *References: [Instaward rules](https://stellar.gitbook.io/scf-handbook/scf-awards/instawards/official-rules) ·
-[Law 4/2026, P2SK amendment (ABNR summary)](https://www.abnrlaw.com/news/indonesias-p2sk-law-amendment-what-law-42026-changes-for-crypto-and-digital-financial-assets) ·
-[Alchemy Pay on Stellar](https://alchemypay.org/news-and-press/alchemy-pay-joins-stellar-ecosystem-to-offer-ramp-service-for-developers-and-dapps) ·
-[Trustless Work API](https://docs.trustlesswork.com/trustless-work/api-rest/introduction) ·
-[DHL Shipment Tracking Unified](https://developer.dhl.com/tracking)*
+[Smart Account Kit](https://github.com/stellar/smart-account-kit) ·
+[OpenZeppelin stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts) ·
+[OpenZeppelin Relayer on Stellar](https://developers.stellar.org/docs/tools/openzeppelin-relayer) ·
+[Trustless Work escrow contract](https://github.com/Trustless-Work/trustlesswork-smart-contract-stellar)*

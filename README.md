@@ -128,6 +128,10 @@ scripts/
 
 ## Known limits
 
+- The browser wallet's sealed secret is also copied to Firestore for recovery, and deal
+  documents carry names and bank details. Both are removed in the Instaward sprint, along
+  with moving the transaction guard on chain as a smart-account policy
+  (see [`instaward-scope.md`](instaward-scope.md)).
 - Mainnet is wired but has not carried a real trade yet. Run one small deal end to end with
   your own money before anyone else's.
 - The Trustless Work API key ships in the bundle, like every `VITE_` variable. It cannot move
