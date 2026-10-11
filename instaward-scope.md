@@ -1,6 +1,7 @@
 # Instaward request — wafiqr: the deal's rules on chain, the keys on the device
 
 **Team:** Dian Bilhokista (engineering, the only role funded) · Inneke Mitha K (product, not funded)
+**Representative:** Dian Bilhokista (SCF Official Rules for Submissions §1.2)
 **Chapter:** Stellar Ambassador Chapter Indonesia
 **Project:** wafiqr — cross-border trade escrow on Stellar
 **Repository:** <https://github.com/bilhokista/wafiqr> · **Live (testnet):** <https://wafiqr.web.app>
